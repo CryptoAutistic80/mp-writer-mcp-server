@@ -1,0 +1,8 @@
+.git
+target
+target-clippy
+.env
+.env.backup
+.env.*
+*.log
+Dockerfile~

@@ -58,6 +58,45 @@ The server listens on `0.0.0.0:<MCP_SERVER_PORT>` (default `4100`).
 
 **Note:** Restart the server after changing `.env` values for changes to take effect.
 
+## Running with Docker
+
+### Build the image
+
+```bash
+docker build -t deep-research-mcp .
+```
+
+### Local run
+
+Use an `.env` file (see the example at the repo root) or inline environment variables to configure the container:
+
+```bash
+docker run --rm -p 4100:4100 \
+  --env-file .env \
+  --name deep-research-mcp \
+  deep-research-mcp
+```
+
+### Docker Compose
+
+If you prefer Compose, the repository ships with `docker-compose.yml`. Populate `.env` with your desired values and run:
+
+```bash
+docker compose up -d --build
+```
+
+Logs can be tailed via:
+
+```bash
+docker compose logs -f
+```
+
+### Production deployment tips
+- The image exposes port `4100`; set `MCP_SERVER_PORT` if you need a different internal port.
+- Provide `MCP_API_KEY` securely via your orchestrator's secrets management (e.g., Docker Swarm secrets, Kubernetes `Secret`, AWS ECS task secret).
+- Enable HTTPS at the ingress layer (e.g., reverse proxy, API gateway) and forward requests to the container's `/api/mcp` endpoint with the `x-api-key` header preserved.
+- For observability, configure `RUST_LOG=info` (or `debug`) before launching the container.
+
 ## Integrating with OpenAI Deep Search
 
 1. **Expose the MCP endpoint**
