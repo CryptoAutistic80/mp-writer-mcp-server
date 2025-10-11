@@ -32,9 +32,12 @@ RUN apt-get update \
 
 COPY --from=builder /app/target/release/mp-writer-mcp-server /usr/local/bin/mp-writer-mcp-server
 
-ENV MCP_SERVER_PORT=4100 \
-    MCP_API_KEY=change-me
+# Do not set MCP_SERVER_PORT here so platforms like Cloud Run
+# can inject their own PORT and the app will bind to it.
+# Only keep a placeholder for MCP_API_KEY; override via env/secret at deploy time.
+ENV MCP_API_KEY=change-me
 
-EXPOSE 4100
+# Documentative only; Cloud Run will ignore EXPOSE.
+EXPOSE 8080
 
 CMD ["mp-writer-mcp-server"]
