@@ -6,17 +6,49 @@ This project provides a Rust implementation of the Deep Research MCP server used
 
 - JSON-RPC 2.0 handling for `initialize`, `list_tools`, and `call_tool` requests.
 - Four tools mapped to UK Parliament APIs:
-  - `parliament.fetch_core_dataset`
-  - `parliament.fetch_bills`
-  - `parliament.fetch_historic_hansard`
-  - `parliament.fetch_legislation`
+  - `parliament.fetch_core_dataset` - Access core datasets (members, constituencies, etc.)
+  - `parliament.fetch_bills` - Search for UK Parliament bills
+  - `parliament.fetch_historic_hansard` - Retrieve historic Hansard debate transcripts
+  - `parliament.fetch_legislation` - Retrieve legislation metadata from legislation.gov.uk
 - Configurable caching with per-tool TTLs and retry logic for unreliable upstream APIs.
-- API key enforcement via the `x-api-key` header.
+- API key enforcement via the `x-api-key` header for all MCP endpoints.
 
 ## Getting Started
 
-1. Copy `.env.example` to `.env` and provide your own values.
-2. Install Rust (1.75 or later) and run:
+### 1. Configure Environment
+
+**Option A: Use the helper script (recommended)**
+
+Run the included script to generate and configure your API key automatically:
+
+```bash
+./scripts/generate-api-key.sh
+```
+
+This script will:
+- Generate a secure random API key
+- Optionally update your `.env` file with the new key
+- Create a backup of your existing `.env` file
+
+**Option B: Manual setup**
+
+Copy `.env.example` to `.env` and set your API key:
+
+```bash
+cp .env.example .env
+```
+
+Generate a secure API key:
+
+```bash
+openssl rand -hex 32
+```
+
+Update the `MCP_API_KEY` in your `.env` file with the generated key.
+
+### 2. Install and Run
+
+Install Rust (1.75 or later) and start the server:
 
 ```bash
 cargo run
@@ -24,18 +56,225 @@ cargo run
 
 The server listens on `0.0.0.0:<MCP_SERVER_PORT>` (default `4100`).
 
-## JSON-RPC Usage
+**Note:** Restart the server after changing `.env` values for changes to take effect.
 
-All MCP requests are sent to `POST /api/mcp` with the body encoded as JSON-RPC 2.0. The standard Deep Research sequence is supported:
+## API Endpoints
 
-1. `initialize`
-2. `list_tools`
-3. `call_tool`
+### Health Check (No authentication required)
 
-Responses follow the format described in the Deep Research documentation. Tool results return the upstream JSON payload inside `result.content[0].json`.
+```bash
+curl http://localhost:4100/api/health | jq
+```
+
+Response:
+```json
+{
+  "status": "ok"
+}
+```
+
+### MCP Endpoint (Authentication required)
+
+All MCP requests require the `x-api-key` header and are sent to `POST /api/mcp` with JSON-RPC 2.0 format.
+
+## Usage Examples
+
+### 1. Initialize Session
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "1.0.0",
+      "clientInfo": {
+        "name": "test-client",
+        "version": "1.0.0"
+      },
+      "capabilities": {}
+    }
+  }' | jq
+```
+
+### 2. List Available Tools
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "list_tools",
+    "params": {}
+  }' | jq
+```
+
+### 3. Call Tool: Fetch Core Dataset
+
+Search for members:
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "call_tool",
+    "params": {
+      "name": "parliament.fetch_core_dataset",
+      "arguments": {
+        "dataset": "members",
+        "searchTerm": "Johnson",
+        "page": 0,
+        "perPage": 10,
+        "enableCache": true,
+        "fuzzyMatch": true,
+        "applyRelevance": false
+      }
+    }
+  }' | jq
+```
+
+### 4. Call Tool: Fetch Bills
+
+Search for bills by keyword:
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "call_tool",
+    "params": {
+      "name": "parliament.fetch_bills",
+      "arguments": {
+        "searchTerm": "climate",
+        "house": "commons",
+        "enableCache": true,
+        "applyRelevance": true,
+        "relevanceThreshold": 0.5
+      }
+    }
+  }' | jq
+```
+
+### 5. Call Tool: Fetch Historic Hansard
+
+Retrieve debate transcripts:
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "call_tool",
+    "params": {
+      "name": "parliament.fetch_historic_hansard",
+      "arguments": {
+        "house": "commons",
+        "path": "1803/jun/20/war-message-from-the-throne",
+        "enableCache": true
+      }
+    }
+  }' | jq
+```
+
+### 6. Call Tool: Fetch Legislation
+
+Search for legislation:
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "call_tool",
+    "params": {
+      "name": "parliament.fetch_legislation",
+      "arguments": {
+        "title": "Human Rights",
+        "year": 1998,
+        "type": "ukpga",
+        "enableCache": true,
+        "applyRelevance": true,
+        "relevanceThreshold": 0.3
+      }
+    }
+  }' | jq
+```
+
+## JSON-RPC Response Format
+
+Tool results return the upstream JSON payload inside `result.content[0].json`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "json",
+        "json": { /* upstream API response */ }
+      }
+    ]
+  }
+}
+```
+
+## Configuration
+
+The `.env` file supports the following variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_API_KEY` | API key for authentication (required) | - |
+| `MCP_SERVER_PORT` | Server port | `4100` |
+| `MCP_DISABLE_PROXY` | Disable proxy for upstream requests | `false` |
+| `CACHE_ENABLED` | Enable response caching | `true` |
+| `CACHE_TTL_MEMBERS` | Cache TTL for members (seconds) | `3600` |
+| `CACHE_TTL_BILLS` | Cache TTL for bills (seconds) | `1800` |
+| `CACHE_TTL_LEGISLATION` | Cache TTL for legislation (seconds) | `7200` |
+| `CACHE_TTL_HANSARD` | Cache TTL for Hansard (seconds) | `3600` |
+| `CACHE_TTL_DATA` | Cache TTL for core datasets (seconds) | `1800` |
+| `RELEVANCE_THRESHOLD` | Default relevance score threshold | `0.3` |
 
 ## Development
 
-- Run `cargo check` or `cargo run` to validate changes.
-- The codebase is organized into feature modules per tool domain to match the project's development rules.
-- No additional setup is required beyond populating the `.env` file.
+- Run `cargo check` to validate changes without building.
+- Run `cargo run` to start the development server.
+- The codebase follows modular organization:
+  - `src/config/` - Configuration loading
+  - `src/core/` - Shared utilities (cache, error handling)
+  - `src/features/mcp/` - JSON-RPC handler and service
+  - `src/features/parliament/` - UK Parliament API integration
+  - `src/server/` - HTTP server setup and middleware
+
+## Error Handling
+
+The server returns standard JSON-RPC 2.0 error responses:
+
+| Code | Description |
+|------|-------------|
+| `-32700` | Parse error |
+| `-32600` | Invalid request |
+| `-32601` | Method not found |
+| `-32602` | Invalid params |
+| `-32000` | Internal error |
+| `-32002` | Upstream API error |
+
+HTTP status codes:
+- `200` - Success (with JSON-RPC response)
+- `401` - Unauthorized (missing or invalid API key)
