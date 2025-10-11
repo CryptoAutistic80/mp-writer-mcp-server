@@ -1,0 +1,77 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,
+    pub id: Value,
+    pub method: String,
+    pub params: Option<Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcSuccess {
+    pub jsonrpc: String,
+    pub id: Value,
+    pub result: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcErrorResponse {
+    pub jsonrpc: String,
+    pub id: Value,
+    pub error: JsonRpcError,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InitializeParams {
+    #[serde(rename = "protocolVersion")]
+    pub protocol_version: String,
+    #[serde(rename = "clientInfo")]
+    pub client_info: ClientInfo,
+    pub capabilities: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClientInfo {
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ListToolsParams {}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CallToolParams {
+    pub name: String,
+    pub arguments: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolListResult {
+    pub tools: Vec<Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolCallResult {
+    pub content: Vec<ToolContent>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub json: Value,
+}
