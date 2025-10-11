@@ -38,10 +38,7 @@ impl ParliamentClient {
         })
     }
 
-    pub async fn fetch_core_dataset(
-        &self,
-        args: FetchCoreDatasetArgs,
-    ) -> Result<Value, AppError> {
+    pub async fn fetch_core_dataset(&self, args: FetchCoreDatasetArgs) -> Result<Value, AppError> {
         let FetchCoreDatasetArgs {
             dataset,
             search_term,
@@ -80,7 +77,8 @@ impl ParliamentClient {
         );
         let ttl = self.dataset_ttl(&dataset);
 
-        self.execute_request(url, cache_key, cache_enabled, ttl).await
+        self.execute_request(url, cache_key, cache_enabled, ttl)
+            .await
     }
 
     pub async fn fetch_bills(&self, args: FetchBillsArgs) -> Result<Value, AppError> {
@@ -96,7 +94,9 @@ impl ParliamentClient {
 
         if let Some(ref house_value) = house {
             if !matches!(house_value.as_str(), "commons" | "lords") {
-                return Err(AppError::bad_request(format!("invalid house value: {house_value}")));
+                return Err(AppError::bad_request(format!(
+                    "invalid house value: {house_value}"
+                )));
             }
         }
 
@@ -128,7 +128,8 @@ impl ParliamentClient {
         );
         let ttl = self.config.cache_ttl.bills;
 
-        self.execute_request(url, cache_key, cache_enabled, ttl).await
+        self.execute_request(url, cache_key, cache_enabled, ttl)
+            .await
     }
 
     pub async fn fetch_historic_hansard(
@@ -136,7 +137,10 @@ impl ParliamentClient {
         args: FetchHistoricHansardArgs,
     ) -> Result<Value, AppError> {
         if !matches!(args.house.as_str(), "commons" | "lords") {
-            return Err(AppError::bad_request(format!("invalid house value: {}", args.house)));
+            return Err(AppError::bad_request(format!(
+                "invalid house value: {}",
+                args.house
+            )));
         }
 
         let encoded_path = args
@@ -158,13 +162,16 @@ impl ParliamentClient {
         let cache_key = format!("hansard:{}", url);
         let ttl = self.config.cache_ttl.hansard;
 
-        self.execute_request(url, cache_key, cache_enabled, ttl).await
+        self.execute_request(url, cache_key, cache_enabled, ttl)
+            .await
     }
 
     pub async fn fetch_legislation(&self, args: FetchLegislationArgs) -> Result<Value, AppError> {
         if let Some(year) = args.year {
             if year < 1800 {
-                return Err(AppError::bad_request(format!("year must be >= 1800, received {year}")));
+                return Err(AppError::bad_request(format!(
+                    "year must be >= 1800, received {year}"
+                )));
             }
         }
 
@@ -200,7 +207,8 @@ impl ParliamentClient {
         );
         let ttl = self.config.cache_ttl.legislation;
 
-        self.execute_request(url, cache_key, cache_enabled, ttl).await
+        self.execute_request(url, cache_key, cache_enabled, ttl)
+            .await
     }
 
     async fn execute_request(
@@ -233,15 +241,14 @@ impl ParliamentClient {
                             "request to {url} failed with {status}: {text}"
                         )));
                     } else {
-                        let json = resp
-                            .json::<Value>()
-                            .await
-                            .map_err(|err| AppError::internal(format!(
-                                "failed to parse response json: {err}"
-                            )))?;
+                        let json = resp.json::<Value>().await.map_err(|err| {
+                            AppError::internal(format!("failed to parse response json: {err}"))
+                        })?;
 
                         if enable_cache {
-                            self.cache.insert(cache_key.clone(), json.clone(), ttl).await;
+                            self.cache
+                                .insert(cache_key.clone(), json.clone(), ttl)
+                                .await;
                         }
 
                         return Ok(json);
@@ -265,7 +272,9 @@ impl ParliamentClient {
     fn dataset_ttl(&self, dataset: &str) -> u64 {
         match dataset {
             "commonsmembers" | "lordsmembers" => self.config.cache_ttl.members,
-            "commonswrittenquestions" | "lordswrittenquestions" | "edms" => self.config.cache_ttl.data,
+            "commonswrittenquestions" | "lordswrittenquestions" | "edms" => {
+                self.config.cache_ttl.data
+            }
             "commonsdivisions" | "lordsdivisions" => self.config.cache_ttl.data,
             _ => self.config.cache_ttl.data,
         }

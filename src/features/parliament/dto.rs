@@ -1,7 +1,6 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct FetchCoreDatasetArgs {
     pub dataset: String,
     #[serde(rename = "searchTerm")]
@@ -21,7 +20,6 @@ pub struct FetchCoreDatasetArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct FetchBillsArgs {
     #[serde(rename = "searchTerm")]
     pub search_term: Option<String>,
@@ -38,7 +36,6 @@ pub struct FetchBillsArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct FetchHistoricHansardArgs {
     pub house: String,
     pub path: String,
@@ -47,7 +44,6 @@ pub struct FetchHistoricHansardArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct FetchLegislationArgs {
     pub title: Option<String>,
     pub year: Option<u32>,
@@ -60,4 +56,3 @@ pub struct FetchLegislationArgs {
     #[serde(rename = "relevanceThreshold")]
     pub relevance_threshold: Option<f32>,
 }
-

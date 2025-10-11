@@ -63,12 +63,6 @@ impl CacheManager {
             }
         }
 
-        guard.insert(
-            key,
-            CacheEntry {
-                value,
-                expires_at,
-            },
-        );
+        guard.insert(key, CacheEntry { value, expires_at });
     }
 }

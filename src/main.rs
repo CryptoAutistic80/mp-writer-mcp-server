@@ -6,18 +6,18 @@ mod server;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use axum::Router;
 use axum::middleware;
 use axum::routing::{get, post};
-use axum::Router;
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
 use crate::config::load_config;
 use crate::core::cache::CacheManager;
 use crate::core::error::AppError;
-use crate::features::mcp::{handle_healthcheck, handle_mcp, McpService};
+use crate::features::mcp::{McpService, handle_healthcheck, handle_mcp};
 use crate::features::parliament::ParliamentClient;
-use crate::server::{require_api_key, AppState};
+use crate::server::{AppState, require_api_key};
 
 const CACHE_CAPACITY: u64 = 1024;
 
@@ -35,7 +35,10 @@ async fn main() -> Result<(), AppError> {
         .route("/api/health", get(handle_healthcheck))
         .route(
             "/api/mcp",
-            post(handle_mcp).layer(middleware::from_fn_with_state(app_state.clone(), require_api_key)),
+            post(handle_mcp).layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                require_api_key,
+            )),
         )
         .with_state(app_state);
 

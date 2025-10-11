@@ -58,6 +58,53 @@ The server listens on `0.0.0.0:<MCP_SERVER_PORT>` (default `4100`).
 
 **Note:** Restart the server after changing `.env` values for changes to take effect.
 
+## Integrating with OpenAI Deep Search
+
+1. **Expose the MCP endpoint**
+   - Ensure the process running Deep Search can reach `http://<host>:<port>/api/mcp`.
+   - Keep the API key from your `.env` file handy; Deep Search must provide it in the `x-api-key` header.
+
+2. **Register the connector inside Deep Search**
+   - In your application's connector configuration, declare an HTTP MCP server entry similar to:
+     ```json
+     {
+       "url": "http://<host>:4100/api/mcp",
+       "api_key": "YOUR_MCP_API_KEY"
+     }
+     ```
+   - If your app supports environment inheritance, you can instead supply `DEEP_RESEARCH_MCP_PORT` and `DEEP_RESEARCH_API_KEY`; the server reads both as fallbacks.
+
+3. **Verify the handshake**
+   - Trigger Deep Search to connect; it will call `initialize`, then `list_tools`, followed by `call_tool` as needed.
+   - You can emulate the first two steps manually with:
+     ```bash
+     curl -X POST http://localhost:4100/api/mcp \
+       -H "Content-Type: application/json" \
+       -H "x-api-key: YOUR_API_KEY" \
+       -d '{
+         "jsonrpc": "2.0",
+         "id": 1,
+         "method": "initialize",
+         "params": {
+           "protocolVersion": "1.0.0",
+           "clientInfo": { "name": "smoke-test", "version": "0.1.0" },
+           "capabilities": {}
+         }
+       }' | jq
+     ```
+   - A successful response includes the server metadata and advertised capabilities:
+     ```json
+     {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "result": {
+         "serverInfo": { "name": "mp-writer-mcp-server", "version": "0.1.0" },
+         "capabilities": { "tools": { "listChanged": false } }
+       }
+     }
+     ```
+   - Follow up with `list_tools` (see below) to confirm the Deep Search runtime will receive tool definitions.
+
 ## API Endpoints
 
 ### Health Check (No authentication required)

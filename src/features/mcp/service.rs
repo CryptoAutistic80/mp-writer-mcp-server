@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::core::error::AppError;
 use crate::features::mcp::dto::{
-    CallToolParams, InitializeParams, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccess,
-    ToolCallResult, ToolContent, ToolListResult,
+    CallToolParams, InitializeParams, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest,
+    JsonRpcSuccess, ToolCallResult, ToolContent, ToolListResult,
 };
 use crate::features::parliament::{
-    handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_historic_hansard, handle_fetch_legislation,
-    FetchBillsArgs, FetchCoreDatasetArgs, FetchHistoricHansardArgs, FetchLegislationArgs, ParliamentClient,
+    FetchBillsArgs, FetchCoreDatasetArgs, FetchHistoricHansardArgs, FetchLegislationArgs,
+    ParliamentClient, handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_historic_hansard,
+    handle_fetch_legislation,
 };
 
 const JSON_RPC_VERSION: &str = "2.0";
@@ -29,7 +30,10 @@ impl McpService {
         }
     }
 
-    pub async fn handle_jsonrpc(&self, request: JsonRpcRequest) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
+    pub async fn handle_jsonrpc(
+        &self,
+        request: JsonRpcRequest,
+    ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
         if request.jsonrpc != JSON_RPC_VERSION {
             return Err(self.invalid_request_response(
                 request.id,
@@ -67,7 +71,7 @@ impl McpService {
                     request.id,
                     -32602,
                     "missing initialize params".to_string(),
-                ))
+                ));
             }
         };
 
@@ -83,8 +87,14 @@ impl McpService {
         );
 
         let result = json!({
+            "serverInfo": {
+                "name": env!("CARGO_PKG_NAME"),
+                "version": env!("CARGO_PKG_VERSION"),
+            },
             "capabilities": {
-                "tools": self.tool_schemas,
+                "tools": {
+                    "listChanged": false
+                }
             }
         });
 
@@ -101,20 +111,27 @@ impl McpService {
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
         if let Some(params) = request.params {
             if params != Value::Object(Default::default()) {
-                serde_json::from_value::<serde_json::Map<String, Value>>(params).map_err(|err| {
-                    self.invalid_request_response(
-                        request.id.clone(),
-                        -32602,
-                        format!("invalid list_tools params: {err}"),
-                    )
-                })?;
+                serde_json::from_value::<serde_json::Map<String, Value>>(params).map_err(
+                    |err| {
+                        self.invalid_request_response(
+                            request.id.clone(),
+                            -32602,
+                            format!("invalid list_tools params: {err}"),
+                        )
+                    },
+                )?;
             }
         }
 
         let result = serde_json::to_value(ToolListResult {
             tools: self.tool_schemas.clone(),
         })
-        .map_err(|err| self.internal_error_response(request.id.clone(), format!("failed to serialize tools: {err}")))?;
+        .map_err(|err| {
+            self.internal_error_response(
+                request.id.clone(),
+                format!("failed to serialize tools: {err}"),
+            )
+        })?;
 
         Ok(JsonRpcSuccess {
             jsonrpc: JSON_RPC_VERSION.to_string(),
@@ -128,7 +145,11 @@ impl McpService {
         request: JsonRpcRequest,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
         let params_value = request.params.ok_or_else(|| {
-            self.invalid_request_response(request.id.clone(), -32602, "missing call_tool params".to_string())
+            self.invalid_request_response(
+                request.id.clone(),
+                -32602,
+                "missing call_tool params".to_string(),
+            )
         })?;
 
         let params = serde_json::from_value::<CallToolParams>(params_value).map_err(|err| {
@@ -141,25 +162,31 @@ impl McpService {
 
         let result_json = match params.name.as_str() {
             "parliament.fetch_core_dataset" => {
-                let args = self.deserialize_arguments::<FetchCoreDatasetArgs>(&request.id, params.arguments)?;
+                let args = self
+                    .deserialize_arguments::<FetchCoreDatasetArgs>(&request.id, params.arguments)?;
                 handle_fetch_core_dataset(&self.parliament_client, args)
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
             "parliament.fetch_bills" => {
-                let args = self.deserialize_arguments::<FetchBillsArgs>(&request.id, params.arguments)?;
+                let args =
+                    self.deserialize_arguments::<FetchBillsArgs>(&request.id, params.arguments)?;
                 handle_fetch_bills(&self.parliament_client, args)
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
             "parliament.fetch_historic_hansard" => {
-                let args = self.deserialize_arguments::<FetchHistoricHansardArgs>(&request.id, params.arguments)?;
+                let args = self.deserialize_arguments::<FetchHistoricHansardArgs>(
+                    &request.id,
+                    params.arguments,
+                )?;
                 handle_fetch_historic_hansard(&self.parliament_client, args)
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
             "parliament.fetch_legislation" => {
-                let args = self.deserialize_arguments::<FetchLegislationArgs>(&request.id, params.arguments)?;
+                let args = self
+                    .deserialize_arguments::<FetchLegislationArgs>(&request.id, params.arguments)?;
                 handle_fetch_legislation(&self.parliament_client, args)
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
@@ -179,7 +206,12 @@ impl McpService {
                 json: result_json,
             }],
         })
-        .map_err(|err| self.internal_error_response(request.id.clone(), format!("failed to serialize tool result: {err}")))?;
+        .map_err(|err| {
+            self.internal_error_response(
+                request.id.clone(),
+                format!("failed to serialize tool result: {err}"),
+            )
+        })?;
 
         Ok(JsonRpcSuccess {
             jsonrpc: JSON_RPC_VERSION.to_string(),
@@ -219,7 +251,12 @@ impl McpService {
         }
     }
 
-    fn invalid_request_response(&self, id: Value, code: i32, message: String) -> JsonRpcErrorResponse {
+    fn invalid_request_response(
+        &self,
+        id: Value,
+        code: i32,
+        message: String,
+    ) -> JsonRpcErrorResponse {
         JsonRpcErrorResponse {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id,
@@ -249,7 +286,7 @@ fn build_tool_schemas() -> Vec<Value> {
         json!({
             "name": "parliament.fetch_core_dataset",
             "description": "Fetch data from the UK Parliament Linked Data API core datasets.",
-            "input_schema": {
+            "inputSchema": {
                 "type": "object",
                 "required": ["dataset"],
                 "properties": {
@@ -268,7 +305,7 @@ fn build_tool_schemas() -> Vec<Value> {
         json!({
             "name": "parliament.fetch_bills",
             "description": "Search for UK Parliament bills.",
-            "input_schema": {
+            "inputSchema": {
                 "type": "object",
                 "properties": {
                     "searchTerm": {"type": "string"},
@@ -285,7 +322,7 @@ fn build_tool_schemas() -> Vec<Value> {
         json!({
             "name": "parliament.fetch_historic_hansard",
             "description": "Retrieve historic Hansard debate transcripts.",
-            "input_schema": {
+            "inputSchema": {
                 "type": "object",
                 "required": ["house", "path"],
                 "properties": {
@@ -299,7 +336,7 @@ fn build_tool_schemas() -> Vec<Value> {
         json!({
             "name": "parliament.fetch_legislation",
             "description": "Retrieve legislation metadata from legislation.gov.uk.",
-            "input_schema": {
+            "inputSchema": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},

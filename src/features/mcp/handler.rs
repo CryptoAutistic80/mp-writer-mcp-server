@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use axum::Json;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::core::error::AppError;
 use crate::features::mcp::dto::{JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest};

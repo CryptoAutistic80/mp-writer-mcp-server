@@ -1,2 +1,13 @@
 /target
+/target-clippy
 .env
+.env.backup
+.env.*
+
+# Editor junk
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+**/*.rs.bk
