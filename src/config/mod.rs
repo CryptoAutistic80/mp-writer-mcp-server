@@ -1,5 +1,6 @@
 mod dto;
 mod loader;
 
-pub use dto::AppConfig;
+#[allow(unused_imports)]
+pub use dto::{AppConfig, CacheTtlConfig};
 pub use loader::load_config;

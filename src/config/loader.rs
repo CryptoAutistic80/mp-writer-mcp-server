@@ -35,7 +35,12 @@ pub fn load_config() -> Result<AppConfig, AppError> {
         legislation: parse_u64_env("CACHE_TTL_LEGISLATION", 7200),
         hansard: parse_u64_env("CACHE_TTL_HANSARD", 3600),
         data: parse_u64_env("CACHE_TTL_DATA", 1800),
+        research: parse_u64_env("CACHE_TTL_RESEARCH", 604800),
     };
+
+    let db_path = env::var("MCP_DB_PATH")
+        .or_else(|_| env::var("DEEP_RESEARCH_DB_PATH"))
+        .unwrap_or_else(|_| "./data/db".to_string());
 
     Ok(AppConfig {
         port,
@@ -44,6 +49,7 @@ pub fn load_config() -> Result<AppConfig, AppError> {
         cache_enabled,
         relevance_threshold,
         cache_ttl,
+        db_path,
     })
 }
 
