@@ -13,13 +13,13 @@ use crate::features::parliament::{
     FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, ParliamentClient,
 };
 use crate::features::research::dto::{
-    BillSummaryDto, DebateSummaryDto, LegislationSummaryDto, ResearchRequestDto, ResearchResponseDto,
-    StateOfPartiesDto, VoteSummaryDto,
+    BillSummaryDto, DebateSummaryDto, LegislationSummaryDto, ResearchRequestDto,
+    ResearchResponseDto, StateOfPartiesDto, VoteSummaryDto,
 };
 use crate::features::research::helpers::{
-    build_cache_key, coerce_limit, compose_summary, ensure_keywords, now_timestamp,
-    parse_bill_results, parse_debate_results, parse_legislation_results, parse_state_of_parties,
-    parse_vote_results, DEFAULT_RESULT_LIMIT,
+    DEFAULT_RESULT_LIMIT, build_cache_key, coerce_limit, compose_summary, ensure_keywords,
+    now_timestamp, parse_bill_results, parse_debate_results, parse_legislation_results,
+    parse_state_of_parties, parse_vote_results,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -284,24 +284,28 @@ impl ResearchService {
         let key_bytes = key.as_bytes().to_vec();
         let ttl = self.cache_ttl;
 
-        let result = task::spawn_blocking(move || -> Result<Option<ResearchResponseDto>, AppError> {
-            let maybe_bytes = tree
-                .get(&key_bytes)
-                .map_err(|err| AppError::internal(format!("cache lookup failed: {err}")))?;
+        let result =
+            task::spawn_blocking(move || -> Result<Option<ResearchResponseDto>, AppError> {
+                let maybe_bytes = tree
+                    .get(&key_bytes)
+                    .map_err(|err| AppError::internal(format!("cache lookup failed: {err}")))?;
 
-            if let Some(bytes) = maybe_bytes {
-                let entry: CachedResearchEntry = serde_json::from_slice(&bytes).map_err(|err| {
-                    AppError::internal(format!("failed to decode cached research entry: {err}"))
-                })?;
-                if now_timestamp().saturating_sub(entry.stored_at) <= ttl {
-                    return Ok(Some(entry.payload));
+                if let Some(bytes) = maybe_bytes {
+                    let entry: CachedResearchEntry =
+                        serde_json::from_slice(&bytes).map_err(|err| {
+                            AppError::internal(format!(
+                                "failed to decode cached research entry: {err}"
+                            ))
+                        })?;
+                    if now_timestamp().saturating_sub(entry.stored_at) <= ttl {
+                        return Ok(Some(entry.payload));
+                    }
                 }
-            }
 
-            Ok(None)
-        })
-        .await
-        .map_err(|err| AppError::internal(format!("cache task join error: {err}")))?;
+                Ok(None)
+            })
+            .await
+            .map_err(|err| AppError::internal(format!("cache task join error: {err}")))?;
 
         result
     }
@@ -313,14 +317,16 @@ impl ResearchService {
             stored_at: now_timestamp(),
             payload: cacheable,
         };
-        let data = serde_json::to_vec(&entry)
-            .map_err(|err| AppError::internal(format!("failed to serialise research cache entry: {err}")))?;
+        let data = serde_json::to_vec(&entry).map_err(|err| {
+            AppError::internal(format!("failed to serialise research cache entry: {err}"))
+        })?;
 
         let tree = self.cache_tree.clone();
         let key_bytes = key.as_bytes().to_vec();
         task::spawn_blocking(move || -> Result<(), AppError> {
-            tree.insert(key_bytes, data)
-                .map_err(|err| AppError::internal(format!("failed to persist research cache entry: {err}")))?;
+            tree.insert(key_bytes, data).map_err(|err| {
+                AppError::internal(format!("failed to persist research cache entry: {err}"))
+            })?;
             Ok(())
         })
         .await

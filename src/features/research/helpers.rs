@@ -93,9 +93,8 @@ pub(super) fn parse_bill_results(value: &Value, limit: usize) -> Vec<BillSummary
     if let Some(items) = locate_array(value, &["items", "results", "bills"]) {
         for item in items.iter() {
             let title = first_string(item, &["title", "shortTitle", "name"]).unwrap_or_else(|| {
-                first_string(item, &["billName", "officialTitle"]).unwrap_or_else(|| {
-                    "Unknown bill".to_string()
-                })
+                first_string(item, &["billName", "officialTitle"])
+                    .unwrap_or_else(|| "Unknown bill".to_string())
             });
 
             let stage = find_value(item, "billStage")
@@ -129,9 +128,8 @@ pub(super) fn parse_legislation_results(value: &Value, limit: usize) -> Vec<Legi
     let mut results = Vec::new();
     if let Some(items) = locate_array(value, &["legislation", "results", "items"]) {
         for item in items.iter() {
-            let title = first_string(item, &["title", "name", "titleXml"]).unwrap_or_else(|| {
-                "Legislation".to_string()
-            });
+            let title = first_string(item, &["title", "name", "titleXml"])
+                .unwrap_or_else(|| "Legislation".to_string());
             let year = first_string(item, &["year", "Year"]);
             let legislation_type = first_string(item, &["type", "Type", "legislationType"]);
             let uri = first_string(item, &["uri", "URI", "_about"]);
@@ -156,9 +154,8 @@ pub(super) fn parse_vote_results(value: &Value, limit: usize) -> Vec<VoteSummary
     let mut results = Vec::new();
     if let Some(items) = locate_array(value, &["items", "results", "votes"]) {
         for item in items.iter() {
-            let title = first_string(item, &["title", "Title", "motion"]).unwrap_or_else(|| {
-                "Division".to_string()
-            });
+            let title = first_string(item, &["title", "Title", "motion"])
+                .unwrap_or_else(|| "Division".to_string());
             let division_number = first_string(item, &["divisionNumber", "DivisionNumber"]);
             let date = first_string(item, &["date", "Date"]);
             let result_value = first_string(item, &["result", "Result"]);
@@ -189,9 +186,8 @@ pub(super) fn parse_debate_results(value: &Value, limit: usize) -> Vec<DebateSum
     let mut results = Vec::new();
     if let Some(items) = locate_array(value, &["items", "results", "debates"]) {
         for item in items.iter() {
-            let title = first_string(item, &["title", "Title", "subject"]).unwrap_or_else(|| {
-                "Debate".to_string()
-            });
+            let title = first_string(item, &["title", "Title", "subject"])
+                .unwrap_or_else(|| "Debate".to_string());
             let house = first_string(item, &["house", "House"]);
             let date = first_string(item, &["date", "Date"]);
             let link = first_string(item, &["uri", "_about", "link"]);
@@ -286,8 +282,7 @@ pub(super) fn compose_summary(topic: &str, response: &ResearchResponseDto) -> St
             let top_party = &state.parties[0];
             segments.push(format!(
                 "House balance: {} holding {:?} seats",
-                top_party.name,
-                top_party.seats
+                top_party.name, top_party.seats
             ));
         }
     }

@@ -47,7 +47,7 @@ impl MockParliamentDataSource {
                 ]
             }),
             legislation: json!({
-                "legislation": [
+                "items": [
                     {
                         "title": "Climate Act",
                         "year": "2008",
@@ -157,7 +157,10 @@ async fn research_service_caches_results() {
         limit: Some(3),
     };
 
-    let first = service.run_research(request.clone()).await.expect("first call");
+    let first = service
+        .run_research(request.clone())
+        .await
+        .expect("first call");
     assert!(!first.cached, "first call should not be cached");
     assert_eq!(first.bills.len(), 1);
     assert_eq!(first.votes.len(), 1);

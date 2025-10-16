@@ -1,8 +1,10 @@
+use axum::Json;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
+use serde_json::json;
 
 use crate::server::AppState;
 
@@ -20,6 +22,15 @@ pub async fn require_api_key(
 
     match provided {
         Some(value) if value == state.api_key.as_ref() => Ok(next.run(request).await),
-        _ => Err(StatusCode::UNAUTHORIZED),
+        _ => Ok((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": {
+                    "code": "unauthorized",
+                    "message": "missing or invalid API key"
+                }
+            })),
+        )
+            .into_response()),
     }
 }

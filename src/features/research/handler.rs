@@ -1,6 +1,6 @@
 use crate::core::error::AppError;
-use crate::features::research::dto::{ResearchRequestDto, ResearchResponseDto};
 use crate::features::research::ResearchService;
+use crate::features::research::dto::{ResearchRequestDto, ResearchResponseDto};
 
 pub async fn handle_run_research(
     service: &ResearchService,
