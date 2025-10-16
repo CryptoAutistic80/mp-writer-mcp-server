@@ -12,20 +12,26 @@ use crate::features::parliament::{
     ParliamentClient, handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_historic_hansard,
     handle_fetch_legislation,
 };
+use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_research};
 
 const JSON_RPC_VERSION: &str = "2.0";
 
 pub struct McpService {
     parliament_client: Arc<ParliamentClient>,
+    research_service: Arc<ResearchService>,
     tool_schemas: Vec<Value>,
 }
 
 impl McpService {
-    pub fn new(parliament_client: Arc<ParliamentClient>) -> Self {
+    pub fn new(
+        parliament_client: Arc<ParliamentClient>,
+        research_service: Arc<ResearchService>,
+    ) -> Self {
         let tool_schemas = build_tool_schemas();
 
         Self {
             parliament_client,
+            research_service,
             tool_schemas,
         }
     }
@@ -191,6 +197,19 @@ impl McpService {
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
+            "research.run" => {
+                let args = self
+                    .deserialize_arguments::<ResearchRequestDto>(&request.id, params.arguments)?;
+                let result = handle_run_research(&self.research_service, args)
+                    .await
+                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?;
+                serde_json::to_value(result).map_err(|err| {
+                    self.internal_error_response(
+                        request.id.clone(),
+                        format!("failed to serialize research response: {err}"),
+                    )
+                })?
+            }
             other => {
                 return Err(self.invalid_request_response(
                     request.id,
@@ -285,7 +304,7 @@ fn build_tool_schemas() -> Vec<Value> {
     vec![
         json!({
             "name": "parliament.fetch_core_dataset",
-            "description": "Fetch data from the UK Parliament Linked Data API core datasets.",
+            "description": "Fetch data from UK Parliament core datasets (legacy Linked Data API) and the Members API.",
             "inputSchema": {
                 "type": "object",
                 "required": ["dataset"],
@@ -304,7 +323,7 @@ fn build_tool_schemas() -> Vec<Value> {
         }),
         json!({
             "name": "parliament.fetch_bills",
-            "description": "Search for UK Parliament bills.",
+            "description": "Search for UK Parliament bills via the versioned bills-api.parliament.uk service.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -321,7 +340,7 @@ fn build_tool_schemas() -> Vec<Value> {
         }),
         json!({
             "name": "parliament.fetch_historic_hansard",
-            "description": "Retrieve historic Hansard debate transcripts.",
+            "description": "Retrieve historic Hansard debate transcripts (JSON when available, HTML fallback otherwise).",
             "inputSchema": {
                 "type": "object",
                 "required": ["house", "path"],
@@ -335,7 +354,7 @@ fn build_tool_schemas() -> Vec<Value> {
         }),
         json!({
             "name": "parliament.fetch_legislation",
-            "description": "Retrieve legislation metadata from legislation.gov.uk.",
+            "description": "Retrieve legislation metadata from legislation.gov.uk Atom feeds.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -345,6 +364,23 @@ fn build_tool_schemas() -> Vec<Value> {
                     "enableCache": {"type": "boolean"},
                     "applyRelevance": {"type": "boolean"},
                     "relevanceThreshold": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+                },
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "research.run",
+            "description": "Aggregate bills, debates, legislation, votes and party balance for a parliamentary topic.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["topic"],
+                "properties": {
+                    "topic": {"type": "string", "minLength": 1},
+                    "billKeywords": {"type": "array", "items": {"type": "string"}},
+                    "debateKeywords": {"type": "array", "items": {"type": "string"}},
+                    "mpId": {"type": "integer", "minimum": 1},
+                    "includeStateOfParties": {"type": "boolean"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 10}
                 },
                 "additionalProperties": false
             }

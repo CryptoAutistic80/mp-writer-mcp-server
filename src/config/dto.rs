@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub cache_enabled: bool,
     pub relevance_threshold: f32,
     pub cache_ttl: CacheTtlConfig,
+    pub db_path: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -17,4 +18,5 @@ pub struct CacheTtlConfig {
     pub legislation: u64,
     pub hansard: u64,
     pub data: u64,
+    pub research: u64,
 }

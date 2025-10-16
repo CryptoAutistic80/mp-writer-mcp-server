@@ -14,3 +14,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
 urlencoding = "2"
+sled = "0.34"
+async-trait = "0.1"
+roxmltree = "0.18"
+
+[dev-dependencies]
+tempfile = "3"

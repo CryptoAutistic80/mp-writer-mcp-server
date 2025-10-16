@@ -5,11 +5,12 @@ This project provides a Rust implementation of the Deep Research MCP server used
 ## Features
 
 - JSON-RPC 2.0 handling for `initialize`, `list_tools`, and `call_tool` requests.
-- Four tools mapped to UK Parliament APIs:
+- Five tools mapped to UK Parliament APIs:
   - `parliament.fetch_core_dataset` - Access core datasets (members, constituencies, etc.)
   - `parliament.fetch_bills` - Search for UK Parliament bills
   - `parliament.fetch_historic_hansard` - Retrieve historic Hansard debate transcripts
   - `parliament.fetch_legislation` - Retrieve legislation metadata from legislation.gov.uk
+  - `research.run` - Aggregate bills, debates, divisions, legislation, and party balance into a cached research brief
 - Configurable caching with per-tool TTLs and retry logic for unreliable upstream APIs.
 - API key enforcement via the `x-api-key` header for all MCP endpoints.
 
@@ -45,6 +46,13 @@ openssl rand -hex 32
 ```
 
 Update the `MCP_API_KEY` in your `.env` file with the generated key.
+
+Additional environment options:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `MCP_DB_PATH` | Filesystem path for the persistent Sled cache used by the research tool. | `./data/db` |
+| `CACHE_TTL_RESEARCH` | TTL (seconds) for persisted research summaries. | `604800` (7 days) |
 
 ### 2. Install and Run
 
@@ -200,7 +208,30 @@ curl -X POST http://localhost:4100/api/mcp \
   }' | jq
 ```
 
-### 3. Call Tool: Fetch Core Dataset
+### 3. Request an aggregated research brief
+
+```bash
+curl -X POST http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "call_tool",
+    "params": {
+      "name": "research.run",
+      "arguments": {
+        "topic": "climate change",
+        "includeStateOfParties": true,
+        "limit": 5
+      }
+    }
+  }' | jq
+```
+
+The response includes a narrative summary and the structured bill, debate, legislation, division, and party-balance data used to compose it. Subsequent requests with the same arguments are served from the persisted Sled cache until the TTL expires.
+
+### 4. Call Tool: Fetch Core Dataset
 
 Search for members:
 
