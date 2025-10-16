@@ -16,7 +16,6 @@ pub struct CacheTtlConfig {
     pub members: u64,
     pub bills: u64,
     pub legislation: u64,
-    pub hansard: u64,
     pub data: u64,
     pub research: u64,
 }

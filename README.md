@@ -1,397 +1,275 @@
 # Deep Research MCP Server
 
-This project provides a Rust implementation of the Deep Research MCP server used to expose UK Parliament tools over JSON-RPC. The server exposes a health endpoint and a `/api/mcp` endpoint compatible with the OpenAI Deep Research agent.
+Rust implementation of an [OpenAI MCP](https://openai.com/index/introducing-the-model-context-protocol/)–compatible service that exposes UK Parliament data and a research aggregator over JSON‑RPC. The server powers Deep Research workflows by providing up‑to‑date information about members, bills, divisions, and legislation.
 
-## Features
+---
 
-- JSON-RPC 2.0 handling for `initialize`, `list_tools`, and `call_tool` requests.
-- Five tools mapped to UK Parliament APIs:
-  - `parliament.fetch_core_dataset` - Access core datasets (members, constituencies, etc.)
-  - `parliament.fetch_bills` - Search for UK Parliament bills
-  - `parliament.fetch_historic_hansard` - Retrieve historic Hansard debate transcripts
-  - `parliament.fetch_legislation` - Retrieve legislation metadata from legislation.gov.uk
-  - `research.run` - Aggregate bills, debates, divisions, legislation, and party balance into a cached research brief
-- Configurable caching with per-tool TTLs and retry logic for unreliable upstream APIs.
-- API key enforcement via the `x-api-key` header for all MCP endpoints.
+## Overview
 
-## Getting Started
+- **JSON‑RPC 2.0** endpoint at `/api/mcp` with `initialize`, `list_tools`, and `call_tool`.
+- **Authentication** via mandatory `x-api-key` header.
+- **Caching** backed by Sled (persisted) plus in‑memory request cache wrappers.
+- **Tools**
+  - `parliament.fetch_core_dataset`
+  - `parliament.fetch_bills`
+  - `parliament.fetch_legislation`
+  - `research.run` – orchestrates the three data tools and returns an authored brief with advisories.
 
-### 1. Configure Environment
+---
 
-**Option A: Use the helper script (recommended)**
+## Requirements
 
-Run the included script to generate and configure your API key automatically:
+- Rust 1.75+ (only for local builds)
+- Cargo (bundled with Rust)
+- Docker / Docker Compose (optional, for containerised deployment)
+- OpenAI Deep Research access (for integration)
 
-```bash
-./scripts/generate-api-key.sh
-```
+---
 
-This script will:
-- Generate a secure random API key
-- Optionally update your `.env` file with the new key
-- Create a backup of your existing `.env` file
+## Configuration
 
-**Option B: Manual setup**
-
-Copy `.env.example` to `.env` and set your API key:
+All configuration is driven by environment variables (or a `.env` file). The quickest way to create one is:
 
 ```bash
 cp .env.example .env
+./scripts/generate-api-key.sh   # optional helper; updates MCP_API_KEY
 ```
-
-Generate a secure API key:
-
-```bash
-openssl rand -hex 32
-```
-
-Update the `MCP_API_KEY` in your `.env` file with the generated key.
-
-Additional environment options:
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `MCP_DB_PATH` | Filesystem path for the persistent Sled cache used by the research tool. | `./data/db` |
-| `CACHE_TTL_RESEARCH` | TTL (seconds) for persisted research summaries. | `604800` (7 days) |
+| `MCP_API_KEY` | **Required.** Shared secret presented in the `x-api-key` header. | – |
+| `MCP_SERVER_PORT` | TCP port exposed by the HTTP server. | `4100` |
+| `MCP_DISABLE_PROXY` | `true` disables outgoing proxy usage for Reqwest clients. | `false` |
+| `CACHE_ENABLED` | Master switch for in-memory HTTP caching. | `true` |
+| `CACHE_TTL_MEMBERS` | Cache TTL (seconds) for members dataset calls. | `3600` |
+| `CACHE_TTL_BILLS` | Cache TTL for bills queries. | `1800` |
+| `CACHE_TTL_LEGISLATION` | Cache TTL for legislation feed fetches. | `7200` |
+| `CACHE_TTL_DATA` | Cache TTL for other Linked Data datasets (divisions, debates, etc.). | `1800` |
+| `CACHE_TTL_RESEARCH` | TTL for persisted research briefs in Sled. | `604800` (7 days) |
+| `RELEVANCE_THRESHOLD` | Default relevance score cut-off used by the aggregator. | `0.3` |
+| `MCP_DB_PATH` | Folder that stores the Sled database. | `./data/db` |
 
-### 2. Install and Run
+> **Note:** Restart the server after changing configuration – values are read at start-up.
 
-Install Rust (1.75 or later) and start the server:
+---
+
+## Running Locally (Cargo)
 
 ```bash
+# 1. Clone & configure
+git clone https://github.com/<your-org>/mp-writer-mcp-server.git
+cd mp-writer-mcp-server
+cp .env.example .env          # or use scripts/generate-api-key.sh
+
+# 2. Launch the server
 cargo run
 ```
 
-The server listens on `0.0.0.0:<MCP_SERVER_PORT>` (default `4100`).
+The server listens on `0.0.0.0:4100` by default. Health check: `curl http://localhost:4100/health`.
 
-**Note:** Restart the server after changing `.env` values for changes to take effect.
+---
 
 ## Running with Docker
 
-### Build the image
+### Build
 
 ```bash
 docker build -t deep-research-mcp .
 ```
 
-### Local run
-
-Use an `.env` file (see the example at the repo root) or inline environment variables to configure the container:
+### Run (stand-alone)
 
 ```bash
-docker run --rm -p 4100:4100 \
+docker run --rm \
+  -p 4100:4100 \
   --env-file .env \
-  --name deep-research-mcp \
   deep-research-mcp
 ```
 
-### Docker Compose
-
-If you prefer Compose, the repository ships with `docker-compose.yml`. Populate `.env` with your desired values and run:
+### Run with Docker Compose
 
 ```bash
-docker compose up -d --build
+docker compose up --build
 ```
 
-Logs can be tailed via:
+Edit `docker-compose.yml` or `.env` to customise port bindings or configuration. Use `docker compose down` to stop.
+
+---
+
+## Available Tools
+
+| Tool | Purpose | Key Arguments |
+| --- | --- | --- |
+| `parliament.fetch_core_dataset` | Query legacy Linked Data datasets (members, divisions, debates, etc.). | `dataset`, `searchTerm`, pagination & relevance toggles |
+| `parliament.fetch_bills` | Search the versioned Bills API for current or past bills. | `searchTerm`, `house`, `session`, `parliamentNumber`, relevance controls |
+| `parliament.fetch_legislation` | Query legislation.gov.uk Atom feeds for matching acts/orders. | `title`, `year`, `type`, relevance controls |
+| `research.run` | Retrieves bills, divisions, debates, legislation, state-of-parties, and composes a brief. Returns advisories when upstream sources fail. | `topic`, optional keyword overrides, `includeStateOfParties`, `limit` |
+
+Each tool responds with the upstream JSON payload. `research.run` returns a structured DTO with `summary`, data vectors, and `advisories`.
+
+---
+
+## Testing the API with `curl`
+
+Replace `YOUR_API_KEY` with the value from your `.env`.
 
 ```bash
-docker compose logs -f
-```
+# 1. List tools
+curl -sS http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq
 
-### Production deployment tips
-- The image exposes port `4100`; set `MCP_SERVER_PORT` if you need a different internal port.
-- Provide `MCP_API_KEY` securely via your orchestrator's secrets management (e.g., Docker Swarm secrets, Kubernetes `Secret`, AWS ECS task secret).
-- Enable HTTPS at the ingress layer (e.g., reverse proxy, API gateway) and forward requests to the container's `/api/mcp` endpoint with the `x-api-key` header preserved.
-- For observability, configure `RUST_LOG=info` (or `debug`) before launching the container.
-
-## Integrating with OpenAI Deep Search
-
-1. **Expose the MCP endpoint**
-   - Ensure the process running Deep Search can reach `http://<host>:<port>/api/mcp`.
-   - Keep the API key from your `.env` file handy; Deep Search must provide it in the `x-api-key` header.
-
-2. **Register the connector inside Deep Search**
-   - In your application's connector configuration, declare an HTTP MCP server entry similar to:
-     ```json
-     {
-       "url": "http://<host>:4100/api/mcp",
-       "api_key": "YOUR_MCP_API_KEY"
-     }
-     ```
-   - If your app supports environment inheritance, you can instead supply `DEEP_RESEARCH_MCP_PORT` and `DEEP_RESEARCH_API_KEY`; the server reads both as fallbacks.
-
-3. **Verify the handshake**
-   - Trigger Deep Search to connect; it will call `initialize`, then `list_tools`, followed by `call_tool` as needed.
-   - You can emulate the first two steps manually with:
-     ```bash
-     curl -X POST http://localhost:4100/api/mcp \
-       -H "Content-Type: application/json" \
-       -H "x-api-key: YOUR_API_KEY" \
-       -d '{
-         "jsonrpc": "2.0",
-         "id": 1,
-         "method": "initialize",
-         "params": {
-           "protocolVersion": "1.0.0",
-           "clientInfo": { "name": "smoke-test", "version": "0.1.0" },
-           "capabilities": {}
-         }
-       }' | jq
-     ```
-   - A successful response includes the server metadata and advertised capabilities:
-     ```json
-     {
-       "jsonrpc": "2.0",
-       "id": 1,
-       "result": {
-         "serverInfo": { "name": "mp-writer-mcp-server", "version": "0.1.0" },
-         "capabilities": { "tools": { "listChanged": false } }
-       }
-     }
-     ```
-   - Follow up with `list_tools` (see below) to confirm the Deep Search runtime will receive tool definitions.
-
-## API Endpoints
-
-### Health Check (No authentication required)
-
-```bash
-curl http://localhost:4100/api/health | jq
-```
-
-Response:
-```json
-{
-  "status": "ok"
-}
-```
-
-### MCP Endpoint (Authentication required)
-
-All MCP requests require the `x-api-key` header and are sent to `POST /api/mcp` with JSON-RPC 2.0 format.
-
-## Usage Examples
-
-### 1. Initialize Session
-
-```bash
-curl -X POST http://localhost:4100/api/mcp \
+# 2. research.run example
+curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_API_KEY" \
   -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "1.0.0",
-      "clientInfo": {
-        "name": "test-client",
-        "version": "1.0.0"
-      },
-      "capabilities": {}
-    }
-  }' | jq
-```
+        "jsonrpc":"2.0",
+        "id":2,
+        "method":"call_tool",
+        "params":{
+          "name":"research.run",
+          "arguments":{
+            "topic":"climate change",
+            "billKeywords":["climate action"],
+            "debateKeywords":["climate debate"],
+            "includeStateOfParties":true,
+            "limit":5
+          }
+        }
+      }' | jq '.result.content[0].json'
 
-### 2. List Available Tools
-
-```bash
-curl -X POST http://localhost:4100/api/mcp \
+# 3. Members lookup (Commons only)
+curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_API_KEY" \
   -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "list_tools",
-    "params": {}
-  }' | jq
-```
+        "jsonrpc":"2.0",
+        "id":3,
+        "method":"call_tool",
+        "params":{
+          "name":"parliament.fetch_core_dataset",
+          "arguments":{
+            "dataset":"commonsmembers",
+            "searchTerm":"Johnson",
+            "page":0,
+            "perPage":10,
+            "enableCache":true,
+            "fuzzyMatch":false,
+            "applyRelevance":false
+          }
+        }
+      }' | jq '.result.content[0].json'
 
-### 3. Request an aggregated research brief
-
-```bash
-curl -X POST http://localhost:4100/api/mcp \
+# 4. Bills search
+curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_API_KEY" \
   -d '{
-    "jsonrpc": "2.0",
-    "id": 3,
-    "method": "call_tool",
-    "params": {
-      "name": "research.run",
-      "arguments": {
-        "topic": "climate change",
-        "includeStateOfParties": true,
-        "limit": 5
-      }
-    }
-  }' | jq
-```
+        "jsonrpc":"2.0",
+        "id":4,
+        "method":"call_tool",
+        "params":{
+          "name":"parliament.fetch_bills",
+          "arguments":{
+            "searchTerm":"climate",
+            "house":"commons",
+            "enableCache":true,
+            "applyRelevance":true,
+            "relevanceThreshold":0.45
+          }
+        }
+      }' | jq '.result.content[0].json'
 
-The response includes a narrative summary and the structured bill, debate, legislation, division, and party-balance data used to compose it. Subsequent requests with the same arguments are served from the persisted Sled cache until the TTL expires.
-
-### 4. Call Tool: Fetch Core Dataset
-
-Search for members:
-
-```bash
-curl -X POST http://localhost:4100/api/mcp \
+# 5. Legislation metadata
+curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_API_KEY" \
   -d '{
-    "jsonrpc": "2.0",
-    "id": 3,
-    "method": "call_tool",
-    "params": {
-      "name": "parliament.fetch_core_dataset",
-      "arguments": {
-        "dataset": "members",
-        "searchTerm": "Johnson",
-        "page": 0,
-        "perPage": 10,
-        "enableCache": true,
-        "fuzzyMatch": true,
-        "applyRelevance": false
-      }
-    }
-  }' | jq
+        "jsonrpc":"2.0",
+        "id":5,
+        "method":"call_tool",
+        "params":{
+          "name":"parliament.fetch_legislation",
+          "arguments":{
+            "title":"Human Rights",
+            "year":1998,
+            "type":"ukpga",
+            "enableCache":true,
+            "applyRelevance":true,
+            "relevanceThreshold":0.3
+          }
+        }
+      }' | jq '.result.content[0].json'
 ```
 
-### 4. Call Tool: Fetch Bills
+Error responses include useful `error.data` metadata (status, upstream URL, advisory text) to aid troubleshooting.
 
-Search for bills by keyword:
+---
 
-```bash
-curl -X POST http://localhost:4100/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_API_KEY" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 4,
-    "method": "call_tool",
-    "params": {
-      "name": "parliament.fetch_bills",
-      "arguments": {
-        "searchTerm": "climate",
-        "house": "commons",
-        "enableCache": true,
-        "applyRelevance": true,
-        "relevanceThreshold": 0.5
-      }
-    }
-  }' | jq
-```
+## Integrating with OpenAI Deep Research
 
-### 5. Call Tool: Fetch Historic Hansard
+Deep Research can connect to local MCP servers over HTTP. You will need:
 
-Retrieve debate transcripts:
+1. The server running (locally or reachable over HTTPS) with a known `MCP_API_KEY`.
+2. Access to OpenAI Deep Research (web UI or compatible client).
 
-```bash
-curl -X POST http://localhost:4100/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_API_KEY" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 5,
-    "method": "call_tool",
-    "params": {
-      "name": "parliament.fetch_historic_hansard",
-      "arguments": {
-        "house": "commons",
-        "path": "1803/jun/20/war-message-from-the-throne",
-        "enableCache": true
-      }
-    }
-  }' | jq
-```
+### Using the Web Interface
 
-### 6. Call Tool: Fetch Legislation
+1. Open Deep Research and go to **Settings → Data sources → Add MCP Server**.
+2. Enter a name (e.g., `UK Parliament Research`).
+3. Set the base URL to `http://localhost:4100/api/mcp` (or your public URL).
+4. Add a header `x-api-key` with the value from your `.env`.
+5. Save and run the connection test – the server should respond with the tool catalogue.
 
-Search for legislation:
+### Using the OpenAI CLI / Config File
 
-```bash
-curl -X POST http://localhost:4100/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_API_KEY" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 6,
-    "method": "call_tool",
-    "params": {
-      "name": "parliament.fetch_legislation",
-      "arguments": {
-        "title": "Human Rights",
-        "year": 1998,
-        "type": "ukpga",
-        "enableCache": true,
-        "applyRelevance": true,
-        "relevanceThreshold": 0.3
-      }
-    }
-  }' | jq
-```
-
-## JSON-RPC Response Format
-
-Tool results return the upstream JSON payload inside `result.content[0].json`:
+If you manage MCP servers through `~/.openai/config.json`, add an entry like:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "content": [
-      {
-        "type": "json",
-        "json": { /* upstream API response */ }
+  "mcpServers": {
+    "parliament": {
+      "type": "http",
+      "url": "http://localhost:4100/api/mcp",
+      "headers": {
+        "x-api-key": "YOUR_API_KEY"
       }
-    ]
+    }
   }
 }
 ```
 
-## Configuration
+After saving the configuration, restart the OpenAI client or rerun Deep Research so it loads the new MCP definition.
 
-The `.env` file supports the following variables:
+### Verifying the Connection
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MCP_API_KEY` | API key for authentication (required) | - |
-| `MCP_SERVER_PORT` | Server port | `4100` |
-| `MCP_DISABLE_PROXY` | Disable proxy for upstream requests | `false` |
-| `CACHE_ENABLED` | Enable response caching | `true` |
-| `CACHE_TTL_MEMBERS` | Cache TTL for members (seconds) | `3600` |
-| `CACHE_TTL_BILLS` | Cache TTL for bills (seconds) | `1800` |
-| `CACHE_TTL_LEGISLATION` | Cache TTL for legislation (seconds) | `7200` |
-| `CACHE_TTL_HANSARD` | Cache TTL for Hansard (seconds) | `3600` |
-| `CACHE_TTL_DATA` | Cache TTL for core datasets (seconds) | `1800` |
-| `RELEVANCE_THRESHOLD` | Default relevance score threshold | `0.3` |
+- In Deep Research, start a new run and choose the MCP server as a data source.
+- The agent should invoke the tools automatically; you can inspect invocation logs to confirm.
+- If authentication fails, double-check the header name (`x-api-key`) and ensure the server is reachable from the Deep Research environment.
 
-## Development
+---
 
-- Run `cargo check` to validate changes without building.
-- Run `cargo run` to start the development server.
-- The codebase follows modular organization:
-  - `src/config/` - Configuration loading
-  - `src/core/` - Shared utilities (cache, error handling)
-  - `src/features/mcp/` - JSON-RPC handler and service
-  - `src/features/parliament/` - UK Parliament API integration
-  - `src/server/` - HTTP server setup and middleware
+## Development & Testing
 
-## Error Handling
+- Lint or format: `cargo fmt`, `cargo clippy`
+- Unit / integration tests: `cargo test`
+- Research service fixture test: `cargo test --test research_tests`
 
-The server returns standard JSON-RPC 2.0 error responses:
+The repository includes a `scripts/` directory with helper utilities and a `docs/` folder containing the longer-term technical plan.
 
-| Code | Description |
-|------|-------------|
-| `-32700` | Parse error |
-| `-32600` | Invalid request |
-| `-32601` | Method not found |
-| `-32602` | Invalid params |
-| `-32000` | Internal error |
-| `-32002` | Upstream API error |
+---
 
-HTTP status codes:
-- `200` - Success (with JSON-RPC response)
-- `401` - Unauthorized (missing or invalid API key)
+## Troubleshooting
+
+- **401 / Unauthorized** – ensure `x-api-key` matches `MCP_API_KEY`.
+- **404 from upstream APIs** – the server surfaces upstream URLs/status in `error.data`; adjust queries or review API changes.
+- **Docker networking** – when running inside Docker, expose the container port and use `http://host.docker.internal:4100/api/mcp` from host clients.
+- **Deep Research does not list the server** – re-run the connection test in settings and verify the server is reachable over HTTPS if accessed from the cloud.
+
+---
+
+## License
+
+See [LICENSE](LICENSE).

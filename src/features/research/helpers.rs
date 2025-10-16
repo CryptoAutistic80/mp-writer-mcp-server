@@ -38,6 +38,36 @@ pub(super) fn ensure_keywords(topic: &str, explicit: &[String]) -> Vec<String> {
     keywords
 }
 
+pub(super) fn expand_search_terms(keyword: &str) -> Vec<String> {
+    let trimmed = keyword.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut terms = Vec::new();
+    push_unique(&mut terms, trimmed);
+
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if let Some(first) = parts.first() {
+        push_unique(&mut terms, first);
+    }
+    if let Some(last) = parts.last() {
+        push_unique(&mut terms, last);
+    }
+
+    terms
+}
+
+fn push_unique(terms: &mut Vec<String>, value: &str) {
+    let candidate = value.trim().to_lowercase();
+    if candidate.len() < 3 {
+        return;
+    }
+    if !terms.iter().any(|existing| existing == &candidate) {
+        terms.push(candidate);
+    }
+}
+
 pub(super) fn build_cache_key(request: &ResearchRequestDto) -> String {
     let mut bill_keywords = request
         .bill_keywords
@@ -238,7 +268,11 @@ pub(super) fn parse_state_of_parties(value: &Value) -> Option<StateOfPartiesDto>
     })
 }
 
-pub(super) fn compose_summary(topic: &str, response: &ResearchResponseDto) -> String {
+pub(super) fn compose_summary(
+    topic: &str,
+    response: &ResearchResponseDto,
+    advisories: &[String],
+) -> String {
     let mut segments = Vec::new();
 
     if let Some(bill) = response.bills.first() {
@@ -288,7 +322,13 @@ pub(super) fn compose_summary(topic: &str, response: &ResearchResponseDto) -> St
     }
 
     if segments.is_empty() {
-        segments.push("No authoritative parliamentary sources were retrieved; consider broadening the topic keywords.".to_string());
+        segments.push(
+            "No authoritative parliamentary sources were retrieved; consider broadening the topic keywords.".to_string()
+        );
+    }
+
+    for note in advisories.iter().take(3) {
+        segments.push(format!("Note: {note}"));
     }
 
     let mut summary = format!("Key research findings on \"{}\":", topic.trim());

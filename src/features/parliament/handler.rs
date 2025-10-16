@@ -3,7 +3,7 @@ use serde_json::Value;
 use crate::core::error::AppError;
 use crate::features::parliament::client::ParliamentClient;
 use crate::features::parliament::dto::{
-    FetchBillsArgs, FetchCoreDatasetArgs, FetchHistoricHansardArgs, FetchLegislationArgs,
+    FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs,
 };
 
 pub async fn handle_fetch_core_dataset(
@@ -18,13 +18,6 @@ pub async fn handle_fetch_bills(
     args: FetchBillsArgs,
 ) -> Result<Value, AppError> {
     client.fetch_bills(args).await
-}
-
-pub async fn handle_fetch_historic_hansard(
-    client: &ParliamentClient,
-    args: FetchHistoricHansardArgs,
-) -> Result<Value, AppError> {
-    client.fetch_historic_hansard(args).await
 }
 
 pub async fn handle_fetch_legislation(

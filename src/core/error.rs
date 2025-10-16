@@ -2,35 +2,48 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("configuration error: {0}")]
-    Configuration(String),
-    #[error("bad request: {0}")]
-    BadRequest(String),
-    #[error("upstream error: {0}")]
-    Upstream(String),
-    #[error("internal error: {0}")]
-    Internal(String),
+    #[error("configuration error: {message}")]
+    Configuration { message: String },
+    #[error("bad request: {message}")]
+    BadRequest { message: String },
+    #[error("upstream error: {message}")]
+    Upstream {
+        message: String,
+        data: Option<Value>,
+    },
+    #[error("internal error: {message}")]
+    Internal { message: String },
 }
 
 impl AppError {
-    pub fn configuration(message: String) -> Self {
-        Self::Configuration(message)
+    pub fn configuration(message: impl Into<String>) -> Self {
+        Self::Configuration {
+            message: message.into(),
+        }
     }
 
-    pub fn bad_request(message: String) -> Self {
-        Self::BadRequest(message)
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest {
+            message: message.into(),
+        }
     }
 
-    pub fn upstream(message: String) -> Self {
-        Self::Upstream(message)
+    pub fn upstream_with_data(message: impl Into<String>, data: Value) -> Self {
+        Self::Upstream {
+            message: message.into(),
+            data: Some(data),
+        }
     }
 
-    pub fn internal(message: String) -> Self {
-        Self::Internal(message)
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
+        }
     }
 }
 
@@ -41,16 +54,15 @@ struct ErrorResponse {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let status = match self {
-            Self::Configuration(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Upstream(_) => StatusCode::BAD_GATEWAY,
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        let (status, message) = match self {
+            Self::Configuration { message } | Self::Internal { message } => {
+                (StatusCode::INTERNAL_SERVER_ERROR, message)
+            }
+            Self::BadRequest { message } => (StatusCode::BAD_REQUEST, message),
+            Self::Upstream { message, .. } => (StatusCode::BAD_GATEWAY, message),
         };
 
-        let body = Json(ErrorResponse {
-            error: self.to_string(),
-        });
+        let body = Json(ErrorResponse { error: message });
 
         (status, body).into_response()
     }

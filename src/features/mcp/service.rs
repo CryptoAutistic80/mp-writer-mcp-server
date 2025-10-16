@@ -8,9 +8,8 @@ use crate::features::mcp::dto::{
     JsonRpcSuccess, ToolCallResult, ToolContent, ToolListResult,
 };
 use crate::features::parliament::{
-    FetchBillsArgs, FetchCoreDatasetArgs, FetchHistoricHansardArgs, FetchLegislationArgs,
-    ParliamentClient, handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_historic_hansard,
-    handle_fetch_legislation,
+    FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, ParliamentClient,
+    handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_legislation,
 };
 use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_research};
 
@@ -181,15 +180,6 @@ impl McpService {
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
-            "parliament.fetch_historic_hansard" => {
-                let args = self.deserialize_arguments::<FetchHistoricHansardArgs>(
-                    &request.id,
-                    params.arguments,
-                )?;
-                handle_fetch_historic_hansard(&self.parliament_client, args)
-                    .await
-                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
-            }
             "parliament.fetch_legislation" => {
                 let args = self
                     .deserialize_arguments::<FetchLegislationArgs>(&request.id, params.arguments)?;
@@ -253,10 +243,12 @@ impl McpService {
     }
 
     fn tool_failure_response(&self, id: Value, error: AppError) -> JsonRpcErrorResponse {
-        let (code, message) = match error {
-            AppError::BadRequest(message) => (-32602, message),
-            AppError::Upstream(message) => (-32002, message),
-            AppError::Configuration(message) | AppError::Internal(message) => (-32000, message),
+        let (code, message, data) = match error {
+            AppError::BadRequest { message } => (-32602, message, None),
+            AppError::Upstream { message, data } => (-32002, message, data),
+            AppError::Configuration { message } | AppError::Internal { message } => {
+                (-32000, message, None)
+            }
         };
 
         JsonRpcErrorResponse {
@@ -265,7 +257,7 @@ impl McpService {
             error: JsonRpcError {
                 code,
                 message,
-                data: None,
+                data,
             },
         }
     }
@@ -334,20 +326,6 @@ fn build_tool_schemas() -> Vec<Value> {
                     "enableCache": {"type": "boolean"},
                     "applyRelevance": {"type": "boolean"},
                     "relevanceThreshold": {"type": "number", "minimum": 0.0, "maximum": 1.0}
-                },
-                "additionalProperties": false
-            }
-        }),
-        json!({
-            "name": "parliament.fetch_historic_hansard",
-            "description": "Retrieve historic Hansard debate transcripts (JSON when available, HTML fallback otherwise).",
-            "inputSchema": {
-                "type": "object",
-                "required": ["house", "path"],
-                "properties": {
-                    "house": {"type": "string", "enum": ["commons", "lords"]},
-                    "path": {"type": "string"},
-                    "enableCache": {"type": "boolean"}
                 },
                 "additionalProperties": false
             }

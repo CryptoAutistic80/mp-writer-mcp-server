@@ -33,7 +33,6 @@ pub fn load_config() -> Result<AppConfig, AppError> {
         members: parse_u64_env("CACHE_TTL_MEMBERS", 3600),
         bills: parse_u64_env("CACHE_TTL_BILLS", 1800),
         legislation: parse_u64_env("CACHE_TTL_LEGISLATION", 7200),
-        hansard: parse_u64_env("CACHE_TTL_HANSARD", 3600),
         data: parse_u64_env("CACHE_TTL_DATA", 1800),
         research: parse_u64_env("CACHE_TTL_RESEARCH", 604800),
     };

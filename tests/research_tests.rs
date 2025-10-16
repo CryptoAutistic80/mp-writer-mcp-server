@@ -137,7 +137,6 @@ async fn research_service_caches_results() {
             members: 10,
             bills: 10,
             legislation: 10,
-            hansard: 10,
             data: 10,
             research: 3600,
         },
@@ -167,6 +166,10 @@ async fn research_service_caches_results() {
     assert_eq!(first.legislation.len(), 1);
     assert_eq!(first.debates.len(), 1);
     assert!(first.state_of_parties.is_some());
+    assert!(
+        first.advisories.is_empty(),
+        "expected no advisories for successful run"
+    );
 
     let second = service.run_research(request).await.expect("second call");
     assert!(second.cached, "second call should read from cache");

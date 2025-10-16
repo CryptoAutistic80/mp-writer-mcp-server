@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::{StatusCode, Url};
+use reqwest::Url;
 use roxmltree::Document;
 use serde_json::{Value, json};
 use tokio::time::sleep;
@@ -11,13 +11,12 @@ use crate::core::cache::CacheManager;
 use crate::core::error::AppError;
 use crate::core::http_client::build_http_client;
 use crate::features::parliament::dto::{
-    FetchBillsArgs, FetchCoreDatasetArgs, FetchHistoricHansardArgs, FetchLegislationArgs,
+    FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs,
 };
 
 const CORE_DATASET_BASE: &str = "https://lda.data.parliament.uk";
 const MEMBERS_API_BASE: &str = "https://members-api.parliament.uk/api/Members/search";
 const BILLS_BASE: &str = "https://bills-api.parliament.uk/api/v1";
-const HANSARD_BASE: &str = "https://api.parliament.uk/historic-hansard";
 const LEGISLATION_BASE: &str = "https://www.legislation.gov.uk";
 const RETRY_ATTEMPTS: usize = 3;
 const RETRY_DELAY_MS: u64 = 500;
@@ -144,133 +143,6 @@ impl ParliamentClient {
             .await
     }
 
-    pub async fn fetch_historic_hansard(
-        &self,
-        args: FetchHistoricHansardArgs,
-    ) -> Result<Value, AppError> {
-        if !matches!(args.house.as_str(), "commons" | "lords") {
-            return Err(AppError::bad_request(format!(
-                "invalid house value: {}",
-                args.house
-            )));
-        }
-
-        let encoded_path = args
-            .path
-            .split('/')
-            .map(urlencoding::encode)
-            .collect::<Vec<_>>()
-            .join("/");
-
-        let base_path = format!(
-            "{base}/{house}/{path}",
-            base = HANSARD_BASE,
-            house = args.house,
-            path = encoded_path
-        );
-        let json_url = Url::parse(&format!("{base_path}.js"))
-            .map_err(|err| AppError::internal(format!("invalid hansard url: {err}")))?;
-
-        let cache_enabled = args.enable_cache.unwrap_or(true);
-        let cache_key = format!("hansard:{}:format:js", json_url);
-        let ttl = self.config.cache_ttl.hansard;
-
-        if cache_enabled {
-            if let Some(cached) = self.cache.get(&cache_key).await {
-                return Ok(cached);
-            }
-        }
-
-        let mut last_error: Option<AppError> = None;
-
-        for attempt in 0..RETRY_ATTEMPTS {
-            let response = self.http_client.get(json_url.clone()).send().await;
-
-            match response {
-                Ok(resp) if resp.status().is_success() => {
-                    let body = resp.text().await.map_err(|err| {
-                        AppError::internal(format!("failed to read hansard response: {err}"))
-                    })?;
-
-                    match serde_json::from_str::<Value>(&body) {
-                        Ok(json) => {
-                            if cache_enabled {
-                                self.cache
-                                    .insert(cache_key.clone(), json.clone(), ttl)
-                                    .await;
-                            }
-                            return Ok(json);
-                        }
-                        Err(_) => {
-                            last_error = Some(AppError::upstream(format!(
-                                "unexpected hansard payload at {json_url}; the historic dataset did not return JSON"
-                            )));
-                            break;
-                        }
-                    }
-                }
-                Ok(resp) if resp.status() == StatusCode::NOT_FOUND => {
-                    // Attempt a lightweight HTML fallback to provide context for missing records.
-                    let html_url =
-                        Url::parse(&format!("{base_path}/index.html")).map_err(|err| {
-                            AppError::internal(format!("invalid hansard fallback url: {err}"))
-                        })?;
-
-                    let fallback = match self.http_client.get(html_url.clone()).send().await {
-                        Ok(res) if res.status().is_success() => match res.text().await {
-                            Ok(html) => extract_html_title(&html).map(|title| (html, title)),
-                            Err(_) => None,
-                        },
-                        _ => None,
-                    };
-
-                    if let Some((html, title)) = fallback {
-                        let payload = json!({
-                            "format": "html-fallback",
-                            "source": html_url.as_str(),
-                            "title": title,
-                            "excerpt": html.chars().take(500).collect::<String>()
-                        });
-
-                        if cache_enabled {
-                            self.cache
-                                .insert(cache_key.clone(), payload.clone(), ttl)
-                                .await;
-                        }
-
-                        return Ok(payload);
-                    }
-
-                    last_error = Some(AppError::upstream(format!(
-                        "no historic hansard record found for path {base_path}. Try using a different date or check the UK Parliament Historic Hansard website for available records."
-                    )));
-                    break;
-                }
-                Ok(resp) => {
-                    let status = resp.status();
-                    let text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "<failed to read body>".to_string());
-                    last_error = Some(AppError::upstream(format!(
-                        "request to {json_url} failed with {status}: {text}"
-                    )));
-                }
-                Err(err) => {
-                    last_error = Some(AppError::upstream(format!(
-                        "network error contacting {json_url}: {err}"
-                    )));
-                }
-            }
-
-            if attempt < RETRY_ATTEMPTS - 1 {
-                sleep(Duration::from_millis(RETRY_DELAY_MS * (attempt as u64 + 1))).await;
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| AppError::internal("request failed".to_string())))
-    }
-
     pub async fn fetch_legislation(&self, args: FetchLegislationArgs) -> Result<Value, AppError> {
         if let Some(year) = args.year {
             if year < 1800 {
@@ -349,14 +221,25 @@ impl ParliamentClient {
                         .text()
                         .await
                         .unwrap_or_else(|_| "<failed to read body>".to_string());
-                    last_error = Some(AppError::upstream(format!(
-                        "request to {url} failed with {status}: {text}"
-                    )));
+                    let snippet = text.chars().take(512).collect::<String>();
+                    last_error = Some(AppError::upstream_with_data(
+                        format!("request to {url} failed with {status}"),
+                        json!({
+                            "url": url.as_str(),
+                            "status": status.as_u16(),
+                            "body": snippet,
+                        }),
+                    ));
                 }
                 Err(err) => {
-                    last_error = Some(AppError::upstream(format!(
-                        "network error contacting {url}: {err}"
-                    )));
+                    last_error = Some(AppError::upstream_with_data(
+                        format!("network error contacting {url}: {err}"),
+                        json!({
+                            "url": url.as_str(),
+                            "status": Value::Null,
+                            "error": err.to_string(),
+                        }),
+                    ));
                 }
             }
 
@@ -365,7 +248,7 @@ impl ParliamentClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| AppError::internal("request failed".to_string())))
+        Err(last_error.unwrap_or_else(|| AppError::internal("request failed")))
     }
 
     async fn fetch_members_dataset(
@@ -493,14 +376,25 @@ impl ParliamentClient {
                         .text()
                         .await
                         .unwrap_or_else(|_| "<failed to read body>".to_string());
-                    last_error = Some(AppError::upstream(format!(
-                        "request to {url} failed with {status}: {text}"
-                    )));
+                    let body_snippet = text.chars().take(512).collect::<String>();
+                    last_error = Some(AppError::upstream_with_data(
+                        format!("request to {url} failed with {status}"),
+                        json!({
+                            "url": url.as_str(),
+                            "status": status.as_u16(),
+                            "body": body_snippet,
+                        }),
+                    ));
                 }
                 Err(err) => {
-                    last_error = Some(AppError::upstream(format!(
-                        "network error contacting {url}: {err}"
-                    )));
+                    last_error = Some(AppError::upstream_with_data(
+                        format!("network error contacting {url}: {err}"),
+                        json!({
+                            "url": url.as_str(),
+                            "status": Value::Null,
+                            "error": err.to_string(),
+                        }),
+                    ));
                 }
             }
 
@@ -509,7 +403,7 @@ impl ParliamentClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| AppError::internal("request failed".to_string())))
+        Err(last_error.unwrap_or_else(|| AppError::internal("request failed")))
     }
 
     fn dataset_ttl(&self, dataset: &str) -> u64 {
@@ -528,29 +422,6 @@ fn sanitise_optional_text(value: Option<String>) -> Option<String> {
     value
         .map(|text| text.trim().to_string())
         .filter(|text| !text.is_empty())
-}
-
-fn extract_html_title(html: &str) -> Option<String> {
-    let lower = html.to_ascii_lowercase();
-    let start = lower.find("<title>")?;
-    let end = lower.find("</title>")?;
-    if end <= start {
-        return None;
-    }
-
-    let title = &html[start + "<title>".len()..end];
-    let cleaned = title
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string();
-
-    if cleaned.is_empty() {
-        None
-    } else {
-        Some(cleaned)
-    }
 }
 
 fn parse_legislation_feed(feed: &str) -> Result<Value, AppError> {

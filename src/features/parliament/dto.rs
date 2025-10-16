@@ -36,14 +36,6 @@ pub struct FetchBillsArgs {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FetchHistoricHansardArgs {
-    pub house: String,
-    pub path: String,
-    #[serde(rename = "enableCache")]
-    pub enable_cache: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct FetchLegislationArgs {
     pub title: Option<String>,
     pub year: Option<u32>,

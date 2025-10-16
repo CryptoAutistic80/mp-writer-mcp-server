@@ -24,6 +24,8 @@ pub struct ResearchResponseDto {
     pub mp_speeches: Vec<SpeechSummaryDto>,
     pub state_of_parties: Option<StateOfPartiesDto>,
     #[serde(default)]
+    pub advisories: Vec<String>,
+    #[serde(default)]
     pub cached: bool,
 }
 
