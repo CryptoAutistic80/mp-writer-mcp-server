@@ -272,7 +272,7 @@ impl ParliamentClient {
         {
             let mut query_pairs = url.query_pairs_mut();
             if let Some(term) = &search_term {
-                query_pairs.append_pair("searchText", term);
+                query_pairs.append_pair("name", term);
             }
             query_pairs.append_pair("take", &take.to_string());
             query_pairs.append_pair("skip", &skip.to_string());
