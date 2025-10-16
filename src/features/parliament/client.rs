@@ -242,7 +242,7 @@ impl ParliamentClient {
                     }
 
                     last_error = Some(AppError::upstream(format!(
-                        "no historic hansard record found for path {base_path}"
+                        "no historic hansard record found for path {base_path}. Try using a different date or check the UK Parliament Historic Hansard website for available records."
                     )));
                     break;
                 }
