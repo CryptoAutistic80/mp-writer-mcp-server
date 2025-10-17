@@ -118,12 +118,12 @@ impl McpService {
                     .await
                     .map(Some)
             }
-            "notifications/initialized" => {
+            "notifications/initialized" | "initialized" => {
                 self.ensure_protocol_header(
                     header_protocol_version.as_deref(),
                     &id,
                 )?;
-                self.handle_initialized_notification();
+                self.handle_initialized_notification(method.as_str());
                 Ok(None)
             }
             "list_tools" | "tools/list" => {
@@ -145,6 +145,16 @@ impl McpService {
                 )?;
                 self.ensure_ready(Some(request_id.clone()))?;
                 self.handle_call_tool(request_id, params).await.map(Some)
+            }
+            "ping" => {
+                let request_id = self.require_request_id(&id, "ping")?;
+                let id_for_header = Some(request_id.clone());
+                self.ensure_protocol_header(
+                    header_protocol_version.as_deref(),
+                    &id_for_header,
+                )?;
+                self.ensure_initialized(Some(request_id.clone()))?;
+                self.handle_ping(request_id).map(Some)
             }
             other => Err(self.invalid_request_response(
                 id,
@@ -244,7 +254,7 @@ impl McpService {
                     "listChanged": false
                 }
             },
-            "instructions": "Call notifications/initialized after a successful initialize response, then use tools/list to discover available tools."
+            "instructions": "Call the initialized notification after a successful initialize response, then use tools/list to discover available tools."
         });
 
         Ok(JsonRpcSuccess {
@@ -549,16 +559,17 @@ impl McpService {
         }
     }
 
-    fn handle_initialized_notification(&self) {
+    fn handle_initialized_notification(&self, method: &str) {
         if !self.initialize_called.load(Ordering::SeqCst) {
             tracing::warn!(
-                "received notifications/initialized before initialize; ignoring notification"
+                method,
+                "received {method} before initialize; ignoring notification"
             );
             return;
         }
 
         self.client_ready.store(true, Ordering::SeqCst);
-        tracing::info!("client signalled readiness via notifications/initialized");
+        tracing::info!(method, "client signalled readiness via {method}");
     }
 
     fn ensure_ready(
@@ -577,12 +588,37 @@ impl McpService {
             return Err(self.invalid_request_response(
                 id,
                 -32002,
-                "client must send notifications/initialized before invoking this method"
+                "client must send the initialized notification before invoking this method"
                     .to_string(),
             ));
         }
 
         Ok(())
+    }
+
+    fn ensure_initialized(
+        &self,
+        id: Option<Value>,
+    ) -> Result<(), JsonRpcErrorResponse> {
+        if !self.initialize_called.load(Ordering::SeqCst) {
+            return Err(self.invalid_request_response(
+                id,
+                -32002,
+                "client must call initialize before invoking this method".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn handle_ping(&self, id: Value) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
+        Ok(JsonRpcSuccess {
+            jsonrpc: JSON_RPC_VERSION.to_string(),
+            id,
+            result: json!({
+                "ok": true
+            }),
+        })
     }
 
     fn ensure_protocol_header(
