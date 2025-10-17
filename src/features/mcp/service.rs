@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use jsonschema::JSONSchema;
 use serde_json::{Value, json};
@@ -21,7 +22,7 @@ use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_
 use crate::features::utilities::{DateTimeService, handle_current_datetime};
 
 const JSON_RPC_VERSION: &str = "2.0";
-const SUPPORTED_PROTOCOL_VERSION: &str = "1.0";
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["1.1", "1.0"];
 
 pub struct McpService {
     parliament_client: Arc<ParliamentClient>,
@@ -29,6 +30,9 @@ pub struct McpService {
     utilities_service: Arc<DateTimeService>,
     tool_schemas: Vec<ToolDefinition>,
     argument_validators: HashMap<String, JSONSchema>,
+    negotiated_protocol: Mutex<Option<String>>,
+    initialize_called: AtomicBool,
+    client_ready: AtomicBool,
 }
 
 impl McpService {
@@ -45,7 +49,11 @@ impl McpService {
                     argument_validators.insert(name, compiled);
                 }
                 Err(err) => {
-                    tracing::error!(tool = %name, error = %err, "failed to compile JSON schema for tool arguments");
+                    tracing::error!(
+                        tool = %name,
+                        error = %err,
+                        "failed to compile JSON schema for tool arguments"
+                    );
                 }
             }
         }
@@ -57,35 +65,62 @@ impl McpService {
             utilities_service,
             tool_schemas,
             argument_validators,
+            negotiated_protocol: Mutex::new(None),
+            initialize_called: AtomicBool::new(false),
+            client_ready: AtomicBool::new(false),
+        }
+    }
+
+    pub fn negotiated_protocol_version(&self) -> Option<String> {
+        match self.negotiated_protocol.lock() {
+            Ok(guard) => guard.clone(),
+            Err(error) => {
+                tracing::error!(error = %error, "protocol version mutex poisoned");
+                None
+            }
         }
     }
 
     pub async fn handle_jsonrpc(
         &self,
         request: JsonRpcRequest,
-    ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
-        if request.jsonrpc != JSON_RPC_VERSION {
+    ) -> Result<Option<JsonRpcSuccess>, JsonRpcErrorResponse> {
+        let JsonRpcRequest {
+            jsonrpc,
+            id,
+            method,
+            params,
+        } = request;
+
+        if jsonrpc != JSON_RPC_VERSION {
             return Err(self.invalid_request_response(
-                request.id,
+                id,
                 -32600,
-                format!("unsupported jsonrpc version: {}", request.jsonrpc),
+                format!("unsupported jsonrpc version: {jsonrpc}"),
             ));
         }
 
-        if request.id.is_null() {
-            return Err(self.invalid_request_response(
-                request.id,
-                -32600,
-                "request id must not be null".to_string(),
-            ));
-        }
-
-        match request.method.as_str() {
-            "initialize" => self.handle_initialize(request).await,
-            "list_tools" | "tools/list" => self.handle_list_tools(request).await,
-            "call_tool" | "tools/call" => self.handle_call_tool(request).await,
+        match method.as_str() {
+            "initialize" => {
+                let request_id = self.require_request_id(&id, "initialize")?;
+                self.handle_initialize(request_id, params).await.map(Some)
+            }
+            "notifications/initialized" => {
+                self.handle_initialized_notification();
+                Ok(None)
+            }
+            "list_tools" | "tools/list" => {
+                let request_id = self.require_request_id(&id, "tools/list")?;
+                self.ensure_ready(Some(request_id.clone()))?;
+                self.handle_list_tools(request_id, params).await.map(Some)
+            }
+            "call_tool" | "tools/call" => {
+                let request_id = self.require_request_id(&id, "tools/call")?;
+                self.ensure_ready(Some(request_id.clone()))?;
+                self.handle_call_tool(request_id, params).await.map(Some)
+            }
             other => Err(self.invalid_request_response(
-                request.id,
+                id,
                 -32601,
                 format!("unknown method: {other}"),
             )),
@@ -94,39 +129,42 @@ impl McpService {
 
     async fn handle_initialize(
         &self,
-        request: JsonRpcRequest,
+        id: Value,
+        params: Option<Value>,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
-        let params = match request.params {
+        let params = match params {
             Some(value) => serde_json::from_value::<InitializeParams>(value).map_err(|err| {
                 self.invalid_request_response(
-                    request.id.clone(),
+                    Some(id.clone()),
                     -32602,
                     format!("invalid initialize params: {err}"),
                 )
             })?,
             None => {
                 return Err(self.invalid_request_response(
-                    request.id,
+                    Some(id.clone()),
                     -32602,
                     "missing initialize params".to_string(),
                 ));
             }
-        }; 
+        };
 
-        if params.protocol_version != SUPPORTED_PROTOCOL_VERSION {
-            return Err(self.invalid_request_response(
-                request.id,
-                -32600,
-                format!(
-                    "unsupported protocolVersion: {}",
-                    params.protocol_version
-                ),
-            ));
-        }
+        let negotiated = self
+            .negotiate_protocol_version(&params.protocol_version)
+            .ok_or_else(|| {
+                self.invalid_request_response(
+                    Some(id.clone()),
+                    -32600,
+                    format!(
+                        "unsupported protocolVersion: {}",
+                        params.protocol_version
+                    ),
+                )
+            })?;
 
         if !params.capabilities.is_object() {
             return Err(self.invalid_request_response(
-                request.id,
+                Some(id.clone()),
                 -32602,
                 "capabilities must be an object".to_string(),
             ));
@@ -143,7 +181,20 @@ impl McpService {
             "initialize payload"
         );
 
+        match self.negotiated_protocol.lock() {
+            Ok(mut guard) => {
+                *guard = Some(negotiated.clone());
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "failed to record negotiated protocol version");
+            }
+        }
+
+        self.initialize_called.store(true, Ordering::SeqCst);
+        self.client_ready.store(false, Ordering::SeqCst);
+
         let result = json!({
+            "protocolVersion": negotiated,
             "serverInfo": {
                 "name": env!("CARGO_PKG_NAME"),
                 "version": env!("CARGO_PKG_VERSION"),
@@ -153,24 +204,26 @@ impl McpService {
                 "tools": {
                     "listChanged": false
                 }
-            }
+            },
+            "instructions": "Call notifications/initialized after a successful initialize response, then use tools/list to discover available tools."
         });
 
         Ok(JsonRpcSuccess {
             jsonrpc: JSON_RPC_VERSION.to_string(),
-            id: request.id,
+            id,
             result,
         })
     }
 
     async fn handle_list_tools(
         &self,
-        request: JsonRpcRequest,
+        id: Value,
+        params: Option<Value>,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
-        let params = match request.params {
+        let params = match params {
             Some(value) => serde_json::from_value::<ListToolsParams>(value).map_err(|err| {
                 self.invalid_request_response(
-                    request.id.clone(),
+                    Some(id.clone()),
                     -32602,
                     format!("invalid tools/list params: {err}"),
                 )
@@ -193,25 +246,26 @@ impl McpService {
         })
         .map_err(|err| {
             self.internal_error_response(
-                request.id.clone(),
+                Some(id.clone()),
                 format!("failed to serialize tools: {err}"),
             )
         })?;
 
         Ok(JsonRpcSuccess {
             jsonrpc: JSON_RPC_VERSION.to_string(),
-            id: request.id,
+            id,
             result,
         })
     }
 
     async fn handle_call_tool(
         &self,
-        request: JsonRpcRequest,
+        id: Value,
+        params: Option<Value>,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
-        let params_value = request.params.ok_or_else(|| {
+        let params_value = params.ok_or_else(|| {
             self.invalid_request_response(
-                request.id.clone(),
+                Some(id.clone()),
                 -32602,
                 "missing call_tool params".to_string(),
             )
@@ -219,7 +273,7 @@ impl McpService {
 
         let params = serde_json::from_value::<CallToolParams>(params_value).map_err(|err| {
             self.invalid_request_response(
-                request.id.clone(),
+                Some(id.clone()),
                 -32602,
                 format!("invalid call_tool params: {err}"),
             )
@@ -235,7 +289,7 @@ impl McpService {
         let call_result: Result<Value, AppError> = match tool_name.as_str() {
             "parliament.fetch_core_dataset" => {
                 let args = self.deserialize_arguments::<FetchCoreDatasetArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -243,7 +297,7 @@ impl McpService {
             }
             "parliament.fetch_bills" => {
                 let args = self.deserialize_arguments::<FetchBillsArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -251,7 +305,7 @@ impl McpService {
             }
             "parliament.fetch_legislation" => {
                 let args = self.deserialize_arguments::<FetchLegislationArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -259,7 +313,7 @@ impl McpService {
             }
             "parliament.fetch_mp_activity" => {
                 let args = self.deserialize_arguments::<FetchMpActivityArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -267,7 +321,7 @@ impl McpService {
             }
             "parliament.fetch_mp_voting_record" => {
                 let args = self.deserialize_arguments::<FetchMpVotingRecordArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -275,7 +329,7 @@ impl McpService {
             }
             "parliament.lookup_constituency_offline" => {
                 let args = self.deserialize_arguments::<LookupConstituencyArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -283,7 +337,7 @@ impl McpService {
             }
             "parliament.search_uk_law" => {
                 let args = self.deserialize_arguments::<SearchUkLawArgs>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -291,7 +345,7 @@ impl McpService {
             }
             "research.run" => {
                 let args = self.deserialize_arguments::<ResearchRequestDto>(
-                    &request.id,
+                    &id,
                     tool_name.as_str(),
                     arguments.clone(),
                 )?;
@@ -312,7 +366,7 @@ impl McpService {
             }
             other => {
                 return Err(self.invalid_request_response(
-                    request.id,
+                    Some(id),
                     -32601,
                     format!("unknown tool: {other}"),
                 ));
@@ -320,13 +374,13 @@ impl McpService {
         };
 
         match call_result {
-            Ok(payload) => self.build_tool_success(request.id, payload),
+            Ok(payload) => self.build_tool_success(id, payload),
             Err(AppError::BadRequest { message }) => Err(self.invalid_request_response(
-                request.id,
+                Some(id),
                 -32602,
                 message,
             )),
-            Err(error) => Ok(self.tool_execution_error(request.id, tool_name.as_str(), error)),
+            Err(error) => Ok(self.tool_execution_error(id, tool_name.as_str(), error)),
         }
     }
 
@@ -341,7 +395,7 @@ impl McpService {
     {
         if !value.is_object() {
             return Err(self.invalid_request_response(
-                id.clone(),
+                Some(id.clone()),
                 -32602,
                 "tool arguments must be an object".to_string(),
             ));
@@ -356,7 +410,7 @@ impl McpService {
                     .join("; ");
 
                 return Err(self.invalid_request_response(
-                    id.clone(),
+                    Some(id.clone()),
                     -32602,
                     format!("invalid tool arguments: {message}"),
                 ));
@@ -367,7 +421,7 @@ impl McpService {
 
         serde_json::from_value::<T>(value).map_err(|err| {
             self.invalid_request_response(
-                id.clone(),
+                Some(id.clone()),
                 -32602,
                 format!("invalid tool arguments: {err}"),
             )
@@ -381,7 +435,7 @@ impl McpService {
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
         let rendered = serde_json::to_string_pretty(&payload).map_err(|err| {
             self.internal_error_response(
-                id.clone(),
+                Some(id.clone()),
                 format!("failed to render tool payload: {err}"),
             )
         })?;
@@ -397,7 +451,7 @@ impl McpService {
 
         let result = serde_json::to_value(tool_result).map_err(|err| {
             self.internal_error_response(
-                id.clone(),
+                Some(id.clone()),
                 format!("failed to encode tool response: {err}"),
             )
         })?;
@@ -456,6 +510,64 @@ impl McpService {
         }
     }
 
+    fn handle_initialized_notification(&self) {
+        if !self.initialize_called.load(Ordering::SeqCst) {
+            tracing::warn!(
+                "received notifications/initialized before initialize; ignoring notification"
+            );
+            return;
+        }
+
+        self.client_ready.store(true, Ordering::SeqCst);
+        tracing::info!("client signalled readiness via notifications/initialized");
+    }
+
+    fn ensure_ready(
+        &self,
+        id: Option<Value>,
+    ) -> Result<(), JsonRpcErrorResponse> {
+        if !self.initialize_called.load(Ordering::SeqCst) {
+            return Err(self.invalid_request_response(
+                id.clone(),
+                -32002,
+                "client must call initialize before invoking this method".to_string(),
+            ));
+        }
+
+        if !self.client_ready.load(Ordering::SeqCst) {
+            return Err(self.invalid_request_response(
+                id,
+                -32002,
+                "client must send notifications/initialized before invoking this method"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn require_request_id(
+        &self,
+        id: &Option<Value>,
+        method: &str,
+    ) -> Result<Value, JsonRpcErrorResponse> {
+        match id {
+            Some(value) if !value.is_null() => Ok(value.clone()),
+            _ => Err(self.invalid_request_response(
+                id.clone(),
+                -32600,
+                format!("{method} requires a non-null id"),
+            )),
+        }
+    }
+
+    fn negotiate_protocol_version(&self, requested: &str) -> Option<String> {
+        SUPPORTED_PROTOCOL_VERSIONS
+            .iter()
+            .find(|version| **version == requested)
+            .map(|version| version.to_string())
+    }
+
     fn describe_tool_error(&self, tool_name: &str, error: &AppError) -> String {
         match error {
             AppError::Upstream { data, .. } => {
@@ -481,13 +593,13 @@ impl McpService {
 
     fn invalid_request_response(
         &self,
-        id: Value,
+        id: Option<Value>,
         code: i32,
         message: String,
     ) -> JsonRpcErrorResponse {
         JsonRpcErrorResponse {
             jsonrpc: JSON_RPC_VERSION.to_string(),
-            id,
+            id: id.unwrap_or(Value::Null),
             error: JsonRpcError {
                 code,
                 message,
@@ -496,10 +608,14 @@ impl McpService {
         }
     }
 
-    fn internal_error_response(&self, id: Value, message: String) -> JsonRpcErrorResponse {
+    fn internal_error_response(
+        &self,
+        id: Option<Value>,
+        message: String,
+    ) -> JsonRpcErrorResponse {
         JsonRpcErrorResponse {
             jsonrpc: JSON_RPC_VERSION.to_string(),
-            id,
+            id: id.unwrap_or(Value::Null),
             error: JsonRpcError {
                 code: -32000,
                 message,
