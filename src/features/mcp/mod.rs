@@ -1,5 +1,6 @@
 pub mod dto;
 pub mod handler;
+pub mod schemas;
 pub mod service;
 
 pub use handler::{handle_healthcheck, handle_mcp};
