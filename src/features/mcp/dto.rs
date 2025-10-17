@@ -70,10 +70,7 @@ pub struct ToolDefinition {
     pub description: String,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
-    #[serde(
-        rename = "outputSchema",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "outputSchema", skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<Value>,
 }
 
@@ -88,10 +85,7 @@ pub struct ToolListResult {
 pub struct ToolCallResult {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<ToolContent>,
-    #[serde(
-        rename = "structuredContent",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "structuredContent", skip_serializing_if = "Option::is_none")]
     pub structured_content: Option<Value>,
     #[serde(rename = "isError", skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,

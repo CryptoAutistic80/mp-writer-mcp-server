@@ -104,63 +104,46 @@ impl McpService {
         match method.as_str() {
             "initialize" => {
                 let request_id = self.require_request_id(&id, "initialize")?;
-                let header_version = header_protocol_version
-                    .clone()
-                    .ok_or_else(|| {
-                        self.invalid_request_response(
-                            Some(request_id.clone()),
-                            -32600,
-                            "initialize requires MCP-Protocol-Version header".to_string(),
-                        )
-                    })?;
-                self
-                    .handle_initialize(request_id, params, header_version)
+                let header_version = header_protocol_version.clone().ok_or_else(|| {
+                    self.invalid_request_response(
+                        Some(request_id.clone()),
+                        -32600,
+                        "initialize requires MCP-Protocol-Version header".to_string(),
+                    )
+                })?;
+                self.handle_initialize(request_id, params, header_version)
                     .await
                     .map(Some)
             }
             "notifications/initialized" | "initialized" => {
-                self.ensure_protocol_header(
-                    header_protocol_version.as_deref(),
-                    &id,
-                )?;
+                self.ensure_protocol_header(header_protocol_version.as_deref(), &id)?;
                 self.handle_initialized_notification(method.as_str());
                 Ok(None)
             }
             "list_tools" | "tools/list" => {
                 let request_id = self.require_request_id(&id, "tools/list")?;
                 let id_for_header = Some(request_id.clone());
-                self.ensure_protocol_header(
-                    header_protocol_version.as_deref(),
-                    &id_for_header,
-                )?;
+                self.ensure_protocol_header(header_protocol_version.as_deref(), &id_for_header)?;
                 self.ensure_ready(Some(request_id.clone()))?;
                 self.handle_list_tools(request_id, params).await.map(Some)
             }
             "call_tool" | "tools/call" => {
                 let request_id = self.require_request_id(&id, "tools/call")?;
                 let id_for_header = Some(request_id.clone());
-                self.ensure_protocol_header(
-                    header_protocol_version.as_deref(),
-                    &id_for_header,
-                )?;
+                self.ensure_protocol_header(header_protocol_version.as_deref(), &id_for_header)?;
                 self.ensure_ready(Some(request_id.clone()))?;
                 self.handle_call_tool(request_id, params).await.map(Some)
             }
             "ping" => {
                 let request_id = self.require_request_id(&id, "ping")?;
                 let id_for_header = Some(request_id.clone());
-                self.ensure_protocol_header(
-                    header_protocol_version.as_deref(),
-                    &id_for_header,
-                )?;
+                self.ensure_protocol_header(header_protocol_version.as_deref(), &id_for_header)?;
                 self.ensure_initialized(Some(request_id.clone()))?;
                 self.handle_ping(request_id).map(Some)
             }
-            other => Err(self.invalid_request_response(
-                id,
-                -32601,
-                format!("unknown method: {other}"),
-            )),
+            other => {
+                Err(self.invalid_request_response(id, -32601, format!("unknown method: {other}")))
+            }
         }
     }
 
@@ -204,10 +187,7 @@ impl McpService {
                 self.invalid_request_response(
                     Some(id.clone()),
                     -32600,
-                    format!(
-                        "unsupported protocolVersion: {}",
-                        params.protocol_version
-                    ),
+                    format!("unsupported protocolVersion: {}", params.protocol_version),
                 )
             })?;
 
@@ -399,19 +379,17 @@ impl McpService {
                     arguments.clone(),
                 )?;
                 match handle_run_research(&self.research_service, args).await {
-                    Ok(result) => serde_json::to_value(result)
-                        .map_err(|err| AppError::internal(format!(
-                            "failed to serialize research response: {err}"
-                        ))),
+                    Ok(result) => serde_json::to_value(result).map_err(|err| {
+                        AppError::internal(format!("failed to serialize research response: {err}"))
+                    }),
                     Err(err) => Err(err),
                 }
             }
             "utilities.current_datetime" => {
                 let result = handle_current_datetime(&self.utilities_service);
-                serde_json::to_value(result)
-                    .map_err(|err| AppError::internal(format!(
-                        "failed to serialize datetime payload: {err}"
-                    )))
+                serde_json::to_value(result).map_err(|err| {
+                    AppError::internal(format!("failed to serialize datetime payload: {err}"))
+                })
             }
             other => {
                 return Err(self.invalid_request_response(
@@ -424,11 +402,9 @@ impl McpService {
 
         match call_result {
             Ok(payload) => self.build_tool_success(id, payload),
-            Err(AppError::BadRequest { message }) => Err(self.invalid_request_response(
-                Some(id),
-                -32602,
-                message,
-            )),
+            Err(AppError::BadRequest { message }) => {
+                Err(self.invalid_request_response(Some(id), -32602, message))
+            }
             Err(error) => Ok(self.tool_execution_error(id, tool_name.as_str(), error)),
         }
     }
@@ -465,7 +441,10 @@ impl McpService {
                 ));
             }
         } else {
-            tracing::debug!(tool = tool_name, "no validator registered for tool arguments");
+            tracing::debug!(
+                tool = tool_name,
+                "no validator registered for tool arguments"
+            );
         }
 
         serde_json::from_value::<T>(value).map_err(|err| {
@@ -512,12 +491,7 @@ impl McpService {
         })
     }
 
-    fn tool_execution_error(
-        &self,
-        id: Value,
-        tool_name: &str,
-        error: AppError,
-    ) -> JsonRpcSuccess {
+    fn tool_execution_error(&self, id: Value, tool_name: &str, error: AppError) -> JsonRpcSuccess {
         let sanitized_message = self.describe_tool_error(tool_name, &error);
         tracing::warn!(tool = tool_name, message = %sanitized_message, "tool execution failed");
         tracing::debug!(tool = tool_name, error = ?error, "detailed tool execution failure");
@@ -572,10 +546,7 @@ impl McpService {
         tracing::info!(method, "client signalled readiness via {method}");
     }
 
-    fn ensure_ready(
-        &self,
-        id: Option<Value>,
-    ) -> Result<(), JsonRpcErrorResponse> {
+    fn ensure_ready(&self, id: Option<Value>) -> Result<(), JsonRpcErrorResponse> {
         if !self.initialize_called.load(Ordering::SeqCst) {
             return Err(self.invalid_request_response(
                 id.clone(),
@@ -596,10 +567,7 @@ impl McpService {
         Ok(())
     }
 
-    fn ensure_initialized(
-        &self,
-        id: Option<Value>,
-    ) -> Result<(), JsonRpcErrorResponse> {
+    fn ensure_initialized(&self, id: Option<Value>) -> Result<(), JsonRpcErrorResponse> {
         if !self.initialize_called.load(Ordering::SeqCst) {
             return Err(self.invalid_request_response(
                 id,
@@ -718,11 +686,7 @@ impl McpService {
         }
     }
 
-    fn internal_error_response(
-        &self,
-        id: Option<Value>,
-        message: String,
-    ) -> JsonRpcErrorResponse {
+    fn internal_error_response(&self, id: Option<Value>, message: String) -> JsonRpcErrorResponse {
         JsonRpcErrorResponse {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id: id.unwrap_or(Value::Null),
