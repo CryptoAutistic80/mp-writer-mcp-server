@@ -27,18 +27,25 @@ async fn main() -> Result<(), AppError> {
     init_tracing();
 
     let config = Arc::new(load_config()?);
-    let cache_manager = CacheManager::new(config.cache_enabled, CACHE_CAPACITY);
-    let parliament_client = Arc::new(ParliamentClient::new(config.clone(), cache_manager)?);
-
     let sled_db = sled::open(&config.db_path).map_err(|err| {
         AppError::internal(format!(
             "failed to open sled database at {}: {err}",
             config.db_path
         ))
     })?;
+    let parliament_tree = sled_db
+        .open_tree("parliament")
+        .map_err(|err| AppError::internal(format!("failed to open parliament cache: {err}")))?;
     let research_tree = sled_db
         .open_tree("research")
         .map_err(|err| AppError::internal(format!("failed to open research cache: {err}")))?;
+
+    let cache_manager = CacheManager::new(config.cache_enabled, CACHE_CAPACITY);
+    let parliament_client = Arc::new(ParliamentClient::new(
+        config.clone(),
+        cache_manager,
+        parliament_tree,
+    )?);
 
     let research_data_source: Arc<dyn crate::features::research::ParliamentDataSource> =
         parliament_client.clone();

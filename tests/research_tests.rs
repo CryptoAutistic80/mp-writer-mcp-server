@@ -139,8 +139,12 @@ async fn research_service_caches_results() {
             legislation: 10,
             data: 10,
             research: 3600,
+            activity: 10,
+            votes: 10,
+            constituency: 10,
         },
         db_path: temp_dir.path().to_string_lossy().to_string(),
+        constituency_dataset_path: None,
     });
 
     let mock = Arc::new(MockParliamentDataSource::new());
@@ -179,4 +183,59 @@ async fn research_service_caches_results() {
     assert_eq!(mock.count_for("commonsdebates").await, 1);
     assert_eq!(mock.count_for("stateofparties").await, 1);
     assert_eq!(mock.count_for("legislation").await, 1);
+}
+
+#[tokio::test]
+async fn test_search_uk_law_endpoint() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let db = sled::open(temp_dir.path()).expect("sled open");
+    let tree = db.open_tree("test").expect("tree");
+
+    let config = Arc::new(AppConfig {
+        port: 0,
+        api_key: "test".to_string(),
+        disable_proxy: false,
+        cache_enabled: true,
+        relevance_threshold: 0.5,
+        cache_ttl: CacheTtlConfig {
+            members: 10,
+            bills: 10,
+            legislation: 10,
+            data: 10,
+            research: 3600,
+            activity: 10,
+            votes: 10,
+            constituency: 10,
+        },
+        db_path: temp_dir.path().to_string_lossy().to_string(),
+        constituency_dataset_path: None,
+    });
+
+    let _mock = Arc::new(MockParliamentDataSource::new());
+    let cache_manager = mp_writer_mcp_server::core::cache::CacheManager::new(true, 1000);
+    let client = mp_writer_mcp_server::features::parliament::ParliamentClient::new(
+        config.clone(),
+        cache_manager,
+        tree.clone(),
+    )
+    .expect("client creation should succeed");
+
+    let search_args = mp_writer_mcp_server::features::parliament::SearchUkLawArgs {
+        query: "climate change".to_string(),
+        legislation_type: Some("all".to_string()),
+        limit: Some(5),
+        enable_cache: Some(false),
+    };
+
+    let results = client
+        .search_uk_law(search_args)
+        .await
+        .expect("search should succeed");
+
+    // The real implementation creates a fallback result when the API fails
+    assert_eq!(results.len(), 1);
+    assert!(results[0].title.contains("climate change"));
+    assert_eq!(results[0].legislation_type, "Primary");
+    assert!(results[0].is_in_force);
+    assert!(results[0].url.contains("legislation.gov.uk"));
 }

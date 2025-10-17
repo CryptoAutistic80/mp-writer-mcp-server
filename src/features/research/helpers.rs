@@ -348,7 +348,7 @@ fn truncate_summary(value: String) -> String {
     }
 
     let mut truncated = value.chars().take(MAX_LEN).collect::<String>();
-    truncated.push_str("…");
+    truncated.push('…');
     truncated
 }
 

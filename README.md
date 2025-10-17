@@ -13,7 +13,12 @@ Rust implementation of an [OpenAI MCP](https://openai.com/index/introducing-the-
   - `parliament.fetch_core_dataset`
   - `parliament.fetch_bills`
   - `parliament.fetch_legislation`
+  - `parliament.fetch_mp_activity`
+  - `parliament.fetch_mp_voting_record`
+  - `parliament.lookup_local_authority`
+  - `parliament.lookup_constituency_offline`
   - `research.run` – orchestrates the three data tools and returns an authored brief with advisories.
+  - `utilities.current_datetime`
 
 ---
 
@@ -46,8 +51,13 @@ cp .env.example .env
 | `CACHE_TTL_LEGISLATION` | Cache TTL for legislation feed fetches. | `7200` |
 | `CACHE_TTL_DATA` | Cache TTL for other Linked Data datasets (divisions, debates, etc.). | `1800` |
 | `CACHE_TTL_RESEARCH` | TTL for persisted research briefs in Sled. | `604800` (7 days) |
+| `CACHE_TTL_ACTIVITY` | TTL for cached MP activity responses (seconds). | `21600` (6 hours) |
+| `CACHE_TTL_VOTES` | TTL for cached voting record responses. | `21600` (6 hours) |
+| `CACHE_TTL_LOCAL_AUTHORITY` | TTL for GOV.UK local authority lookups. | `86400` (24 hours) |
+| `CACHE_TTL_CONSTITUENCY` | TTL for offline constituency lookups. | `86400` (24 hours) |
 | `RELEVANCE_THRESHOLD` | Default relevance score cut-off used by the aggregator. | `0.3` |
 | `MCP_DB_PATH` | Folder that stores the Sled database. | `./data/db` |
+| `CONSTITUENCY_DATASET_PATH` | Path to the mySociety postcode→constituency CSV used for offline lookups. | – |
 
 > **Note:** Restart the server after changing configuration – values are read at start-up.
 
@@ -103,7 +113,12 @@ Edit `docker-compose.yml` or `.env` to customise port bindings or configuration.
 | `parliament.fetch_core_dataset` | Query legacy Linked Data datasets (members, divisions, debates, etc.). | `dataset`, `searchTerm`, pagination & relevance toggles |
 | `parliament.fetch_bills` | Search the versioned Bills API for current or past bills. | `searchTerm`, `house`, `session`, `parliamentNumber`, relevance controls |
 | `parliament.fetch_legislation` | Query legislation.gov.uk Atom feeds for matching acts/orders. | `title`, `year`, `type`, relevance controls |
+| `parliament.fetch_mp_activity` | Recent debates, questions and other activity for a specific MP. | `mpId`, optional `limit`, `enableCache` |
+| `parliament.fetch_mp_voting_record` | Summarise votes cast by an MP, with optional date/bill filters. | `mpId`, `fromDate`, `toDate`, `billId`, `limit`, `enableCache` |
+| `parliament.lookup_local_authority` | Determine the local council(s) covering a postcode. | `postcode`, `enableCache` |
+| `parliament.lookup_constituency_offline` | Offline postcode→constituency resolution with optional MP enrichment. | `postcode`, `enableCache` |
 | `research.run` | Retrieves bills, divisions, debates, legislation, state-of-parties, and composes a brief. Returns advisories when upstream sources fail. | `topic`, optional keyword overrides, `includeStateOfParties`, `limit` |
+| `utilities.current_datetime` | Returns the current UTC and Europe/London timestamps. | – |
 
 Each tool responds with the upstream JSON payload. `research.run` returns a structured DTO with `summary`, data vectors, and `advisories`.
 

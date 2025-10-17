@@ -8,16 +8,21 @@ use crate::features::mcp::dto::{
     JsonRpcSuccess, ToolCallResult, ToolContent, ToolListResult,
 };
 use crate::features::parliament::{
-    FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, ParliamentClient,
+    FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, FetchMpActivityArgs,
+    FetchMpVotingRecordArgs, LookupConstituencyArgs, ParliamentClient, SearchUkLawArgs,
     handle_fetch_bills, handle_fetch_core_dataset, handle_fetch_legislation,
+    handle_fetch_mp_activity, handle_fetch_mp_voting_record, handle_lookup_constituency_offline,
+    handle_search_uk_law,
 };
 use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_research};
+use crate::features::utilities::{DateTimeService, handle_current_datetime};
 
 const JSON_RPC_VERSION: &str = "2.0";
 
 pub struct McpService {
     parliament_client: Arc<ParliamentClient>,
     research_service: Arc<ResearchService>,
+    utilities_service: Arc<DateTimeService>,
     tool_schemas: Vec<Value>,
 }
 
@@ -27,10 +32,12 @@ impl McpService {
         research_service: Arc<ResearchService>,
     ) -> Self {
         let tool_schemas = build_tool_schemas();
+        let utilities_service = Arc::new(DateTimeService::new());
 
         Self {
             parliament_client,
             research_service,
+            utilities_service,
             tool_schemas,
         }
     }
@@ -187,6 +194,38 @@ impl McpService {
                     .await
                     .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
             }
+            "parliament.fetch_mp_activity" => {
+                let args = self
+                    .deserialize_arguments::<FetchMpActivityArgs>(&request.id, params.arguments)?;
+                handle_fetch_mp_activity(&self.parliament_client, args)
+                    .await
+                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
+            }
+            "parliament.fetch_mp_voting_record" => {
+                let args = self.deserialize_arguments::<FetchMpVotingRecordArgs>(
+                    &request.id,
+                    params.arguments,
+                )?;
+                handle_fetch_mp_voting_record(&self.parliament_client, args)
+                    .await
+                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
+            }
+            "parliament.lookup_constituency_offline" => {
+                let args = self.deserialize_arguments::<LookupConstituencyArgs>(
+                    &request.id,
+                    params.arguments,
+                )?;
+                handle_lookup_constituency_offline(&self.parliament_client, args)
+                    .await
+                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
+            }
+            "parliament.search_uk_law" => {
+                let args =
+                    self.deserialize_arguments::<SearchUkLawArgs>(&request.id, params.arguments)?;
+                handle_search_uk_law(&self.parliament_client, args)
+                    .await
+                    .map_err(|err| self.tool_failure_response(request.id.clone(), err))?
+            }
             "research.run" => {
                 let args = self
                     .deserialize_arguments::<ResearchRequestDto>(&request.id, params.arguments)?;
@@ -197,6 +236,15 @@ impl McpService {
                     self.internal_error_response(
                         request.id.clone(),
                         format!("failed to serialize research response: {err}"),
+                    )
+                })?
+            }
+            "utilities.current_datetime" => {
+                let result = handle_current_datetime(&self.utilities_service);
+                serde_json::to_value(result).map_err(|err| {
+                    self.internal_error_response(
+                        request.id.clone(),
+                        format!("failed to serialize datetime payload: {err}"),
                     )
                 })?
             }
@@ -347,6 +395,65 @@ fn build_tool_schemas() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "parliament.fetch_mp_activity",
+            "description": "List recent activity (debates, questions, statements) for a given MP.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["mpId"],
+                "properties": {
+                    "mpId": {"type": "integer", "minimum": 1},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    "enableCache": {"type": "boolean"}
+                },
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "parliament.fetch_mp_voting_record",
+            "description": "Summarise an MP's voting record, optionally filtering by date range or bill.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["mpId"],
+                "properties": {
+                    "mpId": {"type": "integer", "minimum": 1},
+                    "fromDate": {"type": "string", "format": "date"},
+                    "toDate": {"type": "string", "format": "date"},
+                    "billId": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "enableCache": {"type": "boolean"}
+                },
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "parliament.lookup_constituency_offline",
+            "description": "Resolve a postcode to its Westminster constituency using the bundled dataset.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["postcode"],
+                "properties": {
+                    "postcode": {"type": "string", "minLength": 2},
+                    "enableCache": {"type": "boolean"}
+                },
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "parliament.search_uk_law",
+            "description": "Search the complete UK legislation corpus for laws, acts, and statutory instruments.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": {"type": "string", "minLength": 1},
+                    "legislationType": {"type": "string", "enum": ["primary", "secondary", "all"]},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    "enableCache": {"type": "boolean"}
+                },
+                "additionalProperties": false
+            }
+        }),
+        json!({
             "name": "research.run",
             "description": "Aggregate bills, debates, legislation, votes and party balance for a parliamentary topic.",
             "inputSchema": {
@@ -360,6 +467,15 @@ fn build_tool_schemas() -> Vec<Value> {
                     "includeStateOfParties": {"type": "boolean"},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 10}
                 },
+                "additionalProperties": false
+            }
+        }),
+        json!({
+            "name": "utilities.current_datetime",
+            "description": "Return the current UTC time alongside Europe/London local time.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
                 "additionalProperties": false
             }
         }),

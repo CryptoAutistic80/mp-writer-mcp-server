@@ -35,6 +35,9 @@ pub fn load_config() -> Result<AppConfig, AppError> {
         legislation: parse_u64_env("CACHE_TTL_LEGISLATION", 7200),
         data: parse_u64_env("CACHE_TTL_DATA", 1800),
         research: parse_u64_env("CACHE_TTL_RESEARCH", 604800),
+        activity: parse_u64_env("CACHE_TTL_ACTIVITY", 21600),
+        votes: parse_u64_env("CACHE_TTL_VOTES", 21600),
+        constituency: parse_u64_env("CACHE_TTL_CONSTITUENCY", 86400),
     };
 
     let db_path = env::var("MCP_DB_PATH")

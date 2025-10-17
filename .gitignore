@@ -4,6 +4,11 @@
 .env.backup
 .env.*
 
+# Database and runtime data
+/data/
+*.db
+*.sled
+
 # Editor junk
 .DS_Store
 .idea/

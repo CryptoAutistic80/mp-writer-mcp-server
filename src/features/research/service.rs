@@ -448,30 +448,24 @@ impl ResearchService {
         let key_bytes = key.as_bytes().to_vec();
         let ttl = self.cache_ttl;
 
-        let result =
-            task::spawn_blocking(move || -> Result<Option<ResearchResponseDto>, AppError> {
-                let maybe_bytes = tree
-                    .get(&key_bytes)
-                    .map_err(|err| AppError::internal(format!("cache lookup failed: {err}")))?;
+        task::spawn_blocking(move || -> Result<Option<ResearchResponseDto>, AppError> {
+            let maybe_bytes = tree
+                .get(&key_bytes)
+                .map_err(|err| AppError::internal(format!("cache lookup failed: {err}")))?;
 
-                if let Some(bytes) = maybe_bytes {
-                    let entry: CachedResearchEntry =
-                        serde_json::from_slice(&bytes).map_err(|err| {
-                            AppError::internal(format!(
-                                "failed to decode cached research entry: {err}"
-                            ))
-                        })?;
-                    if now_timestamp().saturating_sub(entry.stored_at) <= ttl {
-                        return Ok(Some(entry.payload));
-                    }
+            if let Some(bytes) = maybe_bytes {
+                let entry: CachedResearchEntry = serde_json::from_slice(&bytes).map_err(|err| {
+                    AppError::internal(format!("failed to decode cached research entry: {err}"))
+                })?;
+                if now_timestamp().saturating_sub(entry.stored_at) <= ttl {
+                    return Ok(Some(entry.payload));
                 }
+            }
 
-                Ok(None)
-            })
-            .await
-            .map_err(|err| AppError::internal(format!("cache task join error: {err}")))?;
-
-        result
+            Ok(None)
+        })
+        .await
+        .map_err(|err| AppError::internal(format!("cache task join error: {err}")))?
     }
 
     async fn store_cache(&self, key: &str, response: &ResearchResponseDto) -> Result<(), AppError> {
