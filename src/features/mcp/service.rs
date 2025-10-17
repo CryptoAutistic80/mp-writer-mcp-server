@@ -84,6 +84,7 @@ impl McpService {
     pub async fn handle_jsonrpc(
         &self,
         request: JsonRpcRequest,
+        header_protocol_version: Option<String>,
     ) -> Result<Option<JsonRpcSuccess>, JsonRpcErrorResponse> {
         let JsonRpcRequest {
             jsonrpc,
@@ -103,19 +104,45 @@ impl McpService {
         match method.as_str() {
             "initialize" => {
                 let request_id = self.require_request_id(&id, "initialize")?;
-                self.handle_initialize(request_id, params).await.map(Some)
+                let header_version = header_protocol_version
+                    .clone()
+                    .ok_or_else(|| {
+                        self.invalid_request_response(
+                            Some(request_id.clone()),
+                            -32600,
+                            "initialize requires MCP-Protocol-Version header".to_string(),
+                        )
+                    })?;
+                self
+                    .handle_initialize(request_id, params, header_version)
+                    .await
+                    .map(Some)
             }
             "notifications/initialized" => {
+                self.ensure_protocol_header(
+                    header_protocol_version.as_deref(),
+                    &id,
+                )?;
                 self.handle_initialized_notification();
                 Ok(None)
             }
             "list_tools" | "tools/list" => {
                 let request_id = self.require_request_id(&id, "tools/list")?;
+                let id_for_header = Some(request_id.clone());
+                self.ensure_protocol_header(
+                    header_protocol_version.as_deref(),
+                    &id_for_header,
+                )?;
                 self.ensure_ready(Some(request_id.clone()))?;
                 self.handle_list_tools(request_id, params).await.map(Some)
             }
             "call_tool" | "tools/call" => {
                 let request_id = self.require_request_id(&id, "tools/call")?;
+                let id_for_header = Some(request_id.clone());
+                self.ensure_protocol_header(
+                    header_protocol_version.as_deref(),
+                    &id_for_header,
+                )?;
                 self.ensure_ready(Some(request_id.clone()))?;
                 self.handle_call_tool(request_id, params).await.map(Some)
             }
@@ -131,6 +158,7 @@ impl McpService {
         &self,
         id: Value,
         params: Option<Value>,
+        header_protocol_version: String,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
         let params = match params {
             Some(value) => serde_json::from_value::<InitializeParams>(value).map_err(|err| {
@@ -148,6 +176,17 @@ impl McpService {
                 ));
             }
         };
+
+        if params.protocol_version != header_protocol_version {
+            return Err(self.invalid_request_response(
+                Some(id.clone()),
+                -32600,
+                format!(
+                    "MCP-Protocol-Version header mismatch: payload requested {} but header provided {}",
+                    params.protocol_version, header_protocol_version
+                ),
+            ));
+        }
 
         let negotiated = self
             .negotiate_protocol_version(&params.protocol_version)
@@ -544,6 +583,41 @@ impl McpService {
         }
 
         Ok(())
+    }
+
+    fn ensure_protocol_header(
+        &self,
+        header_protocol_version: Option<&str>,
+        id: &Option<Value>,
+    ) -> Result<(), JsonRpcErrorResponse> {
+        let expected_version = match self.negotiated_protocol_version() {
+            Some(version) => version,
+            None => {
+                return Err(self.invalid_request_response(
+                    id.clone(),
+                    -32002,
+                    "client must call initialize before invoking this method".to_string(),
+                ));
+            }
+        };
+
+        match header_protocol_version {
+            Some(value) if value == expected_version => Ok(()),
+            Some(value) => Err(self.invalid_request_response(
+                id.clone(),
+                -32600,
+                format!(
+                    "MCP-Protocol-Version header mismatch: expected {expected_version}, received {value}"
+                ),
+            )),
+            None => Err(self.invalid_request_response(
+                id.clone(),
+                -32600,
+                format!(
+                    "MCP-Protocol-Version header missing; expected {expected_version}"
+                ),
+            )),
+        }
     }
 
     fn require_request_id(
