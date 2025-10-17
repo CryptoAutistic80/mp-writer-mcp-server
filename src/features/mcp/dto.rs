@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -45,8 +47,13 @@ pub struct ClientInfo {
     pub version: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ListToolsParams {}
+#[derive(Debug, Deserialize, Default)]
+pub struct ListToolsParams {
+    #[serde(default)]
+    pub cursor: Option<String>,
+    #[serde(flatten)]
+    pub _extra: HashMap<String, Value>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct CallToolParams {
@@ -57,6 +64,8 @@ pub struct CallToolParams {
 #[derive(Debug, Serialize)]
 pub struct ToolListResult {
     pub tools: Vec<Value>,
+    #[serde(rename = "nextCursor", skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

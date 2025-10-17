@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::core::error::AppError;
 use crate::features::mcp::dto::{
     CallToolParams, InitializeParams, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest,
-    JsonRpcSuccess, ToolCallResult, ToolContent, ToolListResult,
+    JsonRpcSuccess, ListToolsParams, ToolCallResult, ToolContent, ToolListResult,
 };
 use crate::features::parliament::{
     FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, FetchMpActivityArgs,
@@ -56,8 +56,8 @@ impl McpService {
 
         match request.method.as_str() {
             "initialize" => self.handle_initialize(request).await,
-            "list_tools" => self.handle_list_tools(request).await,
-            "call_tool" => self.handle_call_tool(request).await,
+            "list_tools" | "tools/list" => self.handle_list_tools(request).await,
+            "call_tool" | "tools/call" => self.handle_call_tool(request).await,
             other => Err(self.invalid_request_response(
                 request.id,
                 -32601,
@@ -121,22 +121,31 @@ impl McpService {
         &self,
         request: JsonRpcRequest,
     ) -> Result<JsonRpcSuccess, JsonRpcErrorResponse> {
-        if let Some(params) = request.params {
-            if params != Value::Object(Default::default()) {
-                serde_json::from_value::<serde_json::Map<String, Value>>(params).map_err(
-                    |err| {
-                        self.invalid_request_response(
-                            request.id.clone(),
-                            -32602,
-                            format!("invalid list_tools params: {err}"),
-                        )
-                    },
-                )?;
+        let params = match request.params {
+            Some(value) => serde_json::from_value::<ListToolsParams>(value).map_err(|err| {
+                self.invalid_request_response(
+                    request.id.clone(),
+                    -32602,
+                    format!("invalid tools/list params: {err}"),
+                )
+            })?,
+            None => ListToolsParams::default(),
+        };
+
+        let tools = match params.cursor {
+            Some(cursor) => {
+                tracing::warn!(
+                    %cursor,
+                    "received unsupported pagination cursor for tools/list; returning no results"
+                );
+                Vec::new()
             }
-        }
+            None => self.tool_schemas.clone(),
+        };
 
         let result = serde_json::to_value(ToolListResult {
-            tools: self.tool_schemas.clone(),
+            tools,
+            next_cursor: None,
         })
         .map_err(|err| {
             self.internal_error_response(
