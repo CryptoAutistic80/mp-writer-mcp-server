@@ -223,22 +223,45 @@ Error responses include useful `error.data` metadata (status, upstream URL, advi
 
 ## Integrating with OpenAI Deep Research
 
-Deep Research can connect to local MCP servers over HTTP. You will need:
+This MCP server provides comprehensive UK Parliament data to OpenAI Deep Research, enabling AI-powered research on legislation, MPs, voting records, and parliamentary activity.
 
-1. The server running (locally or reachable over HTTPS) with a known `MCP_API_KEY`.
-2. Access to OpenAI Deep Research (web UI or compatible client).
+### Prerequisites
 
-### Using the Web Interface
+1. **Server Running**: The MCP server must be running (locally or remotely) with a known `MCP_API_KEY`
+2. **Deep Research Access**: Access to OpenAI Deep Research (web UI or compatible client)
+3. **Network Connectivity**: Deep Research must be able to reach your server
 
-1. Open Deep Research and go to **Settings → Data sources → Add MCP Server**.
-2. Enter a name (e.g., `UK Parliament Research`).
-3. Set the base URL to `http://localhost:4100/api/mcp` (or your public URL).
-4. Add a header `x-api-key` with the value from your `.env`.
-5. Save and run the connection test – the server should respond with the tool catalogue.
+### Quick Setup (Web Interface - Recommended)
 
-### Using the OpenAI CLI / Config File
+1. **Start Your Server**
+   ```bash
+   # Using Docker Compose (recommended)
+   docker compose up -d
+   
+   # Or using Cargo
+   cargo run
+   ```
 
-If you manage MCP servers through `~/.openai/config.json`, add an entry like:
+2. **Open Deep Research**
+   - Go to [Deep Research](https://chat.openai.com/?model=gpt-4o-deep-research)
+   - Sign in to your OpenAI account
+
+3. **Add MCP Server**
+   - Navigate to **Settings → Data sources → Add MCP Server**
+   - **Name**: `UK Parliament Research`
+   - **Base URL**: `http://localhost:4100/api/mcp`
+   - **Headers**: Add header with:
+     - **Key**: `x-api-key`
+     - **Value**: `4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443`
+
+4. **Test Connection**
+   - Click **Test Connection**
+   - Should show success with 9 available tools
+   - Click **Save**
+
+### CLI Configuration
+
+For OpenAI CLI users, create/edit `~/.openai/config.json`:
 
 ```json
 {
@@ -247,20 +270,142 @@ If you manage MCP servers through `~/.openai/config.json`, add an entry like:
       "type": "http",
       "url": "http://localhost:4100/api/mcp",
       "headers": {
-        "x-api-key": "YOUR_API_KEY"
+        "x-api-key": "4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443"
       }
     }
   }
 }
 ```
 
-After saving the configuration, restart the OpenAI client or rerun Deep Research so it loads the new MCP definition.
+Restart your OpenAI client after saving the configuration.
 
-### Verifying the Connection
+### Testing the Integration
 
-- In Deep Research, start a new run and choose the MCP server as a data source.
-- The agent should invoke the tools automatically; you can inspect invocation logs to confirm.
-- If authentication fails, double-check the header name (`x-api-key`) and ensure the server is reachable from the Deep Research environment.
+#### Sample Research Queries
+
+Try these queries in Deep Research to test the integration:
+
+```
+"Research recent climate change legislation in the UK Parliament"
+"Find information about Boris Johnson's voting record"
+"What bills are currently being debated in the House of Commons?"
+"Look up constituency information for postcode SW1A 1AA"
+"Analyze the current state of parties in Parliament"
+```
+
+#### Monitoring Server Activity
+
+Watch your server logs to see Deep Research invoking tools:
+
+```bash
+# Monitor Docker logs
+docker logs -f mp-writer-mcp-server-mcp-server-1
+
+# Or monitor Cargo logs
+cargo run
+```
+
+### Available Tools for Deep Research
+
+| Tool | Purpose | Example Use Case |
+|------|---------|------------------|
+| `parliament.fetch_core_dataset` | Query MPs, divisions, debates | "Find all Labour MPs" |
+| `parliament.fetch_bills` | Search current/past bills | "What climate bills are active?" |
+| `parliament.fetch_legislation` | UK legislation metadata | "Find Human Rights Act details" |
+| `parliament.fetch_mp_activity` | MP's recent activity | "What has Caroline Johnson been doing?" |
+| `parliament.fetch_mp_voting_record` | MP voting history | "How did Boris Johnson vote on Brexit?" |
+| `parliament.lookup_constituency_offline` | Postcode to constituency | "What constituency is SW1A 1AA?" |
+| `parliament.search_uk_law` | Search UK legislation | "Find all climate change laws" |
+| `research.run` | Comprehensive research brief | "Research UK net zero policy" |
+| `utilities.current_datetime` | Current time (UTC/London) | "What's the current time?" |
+
+### Troubleshooting
+
+#### Connection Issues
+
+**Problem**: Connection test fails
+- **Solution**: Verify server is running with `curl http://localhost:4100/api/health`
+- **Check**: Docker container status with `docker ps`
+
+**Problem**: Authentication errors
+- **Solution**: Ensure header name is exactly `x-api-key` (case-sensitive)
+- **Check**: API key matches the one in your `.env` file
+
+**Problem**: Tools not appearing
+- **Solution**: Test `list_tools` endpoint manually
+- **Check**: Server logs for errors
+
+#### Network Configuration
+
+**Local Development**:
+- Use `http://localhost:4100/api/mcp`
+- Ensure Deep Research can reach localhost
+
+**Remote Server**:
+- Replace `localhost` with your server's IP/domain
+- Consider HTTPS for production deployments
+
+**Docker Networking**:
+- Use `http://host.docker.internal:4100/api/mcp` if Deep Research runs in Docker
+- Or expose port 4100 to host network
+
+### Production Deployment
+
+For production use with Deep Research:
+
+1. **HTTPS Setup**
+   ```bash
+   # Use reverse proxy with SSL
+   nginx -t && systemctl reload nginx
+   ```
+
+2. **API Key Management**
+   ```bash
+   # Generate new API key
+   ./scripts/generate-api-key.sh
+   
+   # Update both server and client configs
+   ```
+
+3. **Monitoring**
+   ```bash
+   # Set up log monitoring
+   docker logs --tail=100 -f mp-writer-mcp-server-mcp-server-1
+   ```
+
+### Advanced Usage
+
+#### Custom Research Workflows
+
+Deep Research can combine multiple tools for comprehensive analysis:
+
+```
+"Research the UK's approach to climate change by analyzing:
+1. Current climate bills in Parliament
+2. Recent voting records of key MPs
+3. Existing climate legislation
+4. Current party positions"
+```
+
+#### Integration with Other Tools
+
+The MCP server works alongside other Deep Research data sources:
+- Web search results
+- Document analysis
+- Other MCP servers
+
+### Support
+
+- **Server Issues**: Check [Troubleshooting](#troubleshooting) section
+- **API Documentation**: See [Available Tools](#available-tools-for-deep-research)
+- **Configuration**: Reference `.env.example` for all options
+
+### Additional Documentation
+
+- **[Deep Research Integration Guide](docs/DEEP_RESEARCH_INTEGRATION.md)** - Step-by-step setup instructions
+- **[Configuration Examples](docs/CONFIGURATION_EXAMPLES.md)** - Various deployment scenarios
+- **[API Testing Guide](docs/API_TESTING_GUIDE.md)** - Comprehensive endpoint testing
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** - Essential commands and settings
 
 ---
 
