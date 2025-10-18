@@ -13,6 +13,12 @@ pub async fn handle_mcp(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> impl IntoResponse {
+    // Debug: Log all headers for troubleshooting
+    tracing::debug!(
+        headers = ?headers.iter().map(|(k, v)| (k.as_str(), v.to_str().unwrap_or("<invalid>"))).collect::<Vec<_>>(),
+        "received request headers"
+    );
+
     match serde_json::from_value::<JsonRpcRequest>(payload) {
         Ok(request) => {
             let header_protocol_version = headers

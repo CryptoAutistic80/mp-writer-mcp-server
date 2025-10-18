@@ -22,7 +22,7 @@ use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_
 use crate::features::utilities::{DateTimeService, handle_current_datetime};
 
 const JSON_RPC_VERSION: &str = "2.0";
-const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["1.1", "1.0"];
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-03-26", "1.1", "1.0"];
 
 pub struct McpService {
     parliament_client: Arc<ParliamentClient>,

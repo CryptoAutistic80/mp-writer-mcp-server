@@ -144,7 +144,6 @@ async fn research_service_caches_results() {
             constituency: 10,
         },
         db_path: temp_dir.path().to_string_lossy().to_string(),
-        constituency_dataset_path: None,
     });
 
     let mock = Arc::new(MockParliamentDataSource::new());
@@ -208,7 +207,6 @@ async fn test_search_uk_law_endpoint() {
             constituency: 10,
         },
         db_path: temp_dir.path().to_string_lossy().to_string(),
-        constituency_dataset_path: None,
     });
 
     let _mock = Arc::new(MockParliamentDataSource::new());
