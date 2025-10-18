@@ -7,6 +7,7 @@ This guide provides comprehensive testing instructions for the UK Parliament MCP
 - Server running on `http://localhost:4100`
 - API key: `4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443`
 - `curl` and `jq` installed
+- Include the header `MCP-Protocol-Version: 2025-03-26` on every MCP HTTP request (including notifications).
 
 ## Health Check
 
@@ -27,6 +28,7 @@ curl http://localhost:4100/api/health
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq
 ```
 
@@ -38,7 +40,8 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}' | jq
+  -H "MCP-Protocol-Version: 2025-03-26" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}' | jq
 ```
 
 ## Tool Testing
@@ -49,6 +52,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | jq
 ```
 
@@ -60,6 +64,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":5,"enableCache":true,"fuzzyMatch":false,"applyRelevance":false}}}' | jq
 ```
 
@@ -71,6 +76,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.45}}}' | jq
 ```
 
@@ -82,6 +88,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":4,"method":"call_tool","params":{"name":"parliament.fetch_legislation","arguments":{"title":"Human Rights","year":1998,"type":"ukpga","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.3}}}' | jq
 ```
 
@@ -93,6 +100,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":5,"method":"call_tool","params":{"name":"parliament.fetch_mp_activity","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
 ```
 
@@ -104,6 +112,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":6,"method":"call_tool","params":{"name":"parliament.fetch_mp_voting_record","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
 ```
 
@@ -115,6 +124,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":7,"method":"call_tool","params":{"name":"parliament.lookup_constituency_offline","arguments":{"postcode":"SW1A 1AA","enableCache":true}}}' | jq
 ```
 
@@ -126,6 +136,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":8,"method":"call_tool","params":{"name":"parliament.search_uk_law","arguments":{"query":"climate change","legislationType":"primary","limit":5,"enableCache":true}}}' | jq
 ```
 
@@ -137,6 +148,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":9,"method":"call_tool","params":{"name":"research.run","arguments":{"topic":"climate change","billKeywords":["climate action"],"debateKeywords":["climate debate"],"includeStateOfParties":true,"limit":5}}}' | jq
 ```
 
@@ -151,6 +163,7 @@ Create a test script to run all endpoints:
 
 API_KEY="4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443"
 BASE_URL="http://localhost:4100/api/mcp"
+PROTOCOL_VERSION="2025-03-26"
 
 echo "Testing UK Parliament MCP Server..."
 
@@ -163,6 +176,7 @@ echo "2. List tools..."
 curl -sS "$BASE_URL" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
+  -H "MCP-Protocol-Version: $PROTOCOL_VERSION" \
   -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq '.result.tools | length'
 
 # Test each tool
@@ -170,18 +184,21 @@ echo "3. Testing utilities.current_datetime..."
 curl -sS "$BASE_URL" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
+  -H "MCP-Protocol-Version: $PROTOCOL_VERSION" \
   -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | jq '.result.content[0].json'
 
 echo "4. Testing parliament.fetch_core_dataset..."
 curl -sS "$BASE_URL" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
+  -H "MCP-Protocol-Version: $PROTOCOL_VERSION" \
   -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":2,"enableCache":true}}}' | jq '.result.content[0].json.items | length'
 
 echo "5. Testing parliament.fetch_bills..."
 curl -sS "$BASE_URL" \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
+  -H "MCP-Protocol-Version: $PROTOCOL_VERSION" \
   -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true}}}' | jq '.result.content[0].json.items | length'
 
 echo "All tests completed!"
@@ -195,6 +212,7 @@ echo "All tests completed!"
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: invalid-key" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq
 ```
 
@@ -205,6 +223,7 @@ curl -sS http://localhost:4100/api/mcp \
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq
 ```
 
@@ -216,6 +235,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"invalid.tool","arguments":{}}}' | jq
 ```
 
@@ -227,6 +247,7 @@ curl -sS http://localhost:4100/api/mcp \
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"parliament.fetch_mp_activity","arguments":{"mpId":"invalid"}}}' | jq
 ```
 
@@ -242,6 +263,7 @@ for i in {1..10}; do
   curl -sS http://localhost:4100/api/mcp \
     -H "Content-Type: application/json" \
     -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+    -H "MCP-Protocol-Version: 2025-03-26" \
     -d '{"jsonrpc":"2.0","id":'$i',"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' &
 done
 wait
@@ -254,12 +276,14 @@ wait
 time curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","enableCache":true}}}' > /dev/null
 
 # Second request (cache hit)
 time curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
   -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","enableCache":true}}}' > /dev/null
 ```
 

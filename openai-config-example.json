@@ -4,7 +4,8 @@
       "type": "http",
       "url": "http://localhost:4100/api/mcp",
       "headers": {
-        "x-api-key": "4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443"
+        "x-api-key": "4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443",
+        "MCP-Protocol-Version": "2025-03-26"
       }
     }
   }

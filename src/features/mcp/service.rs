@@ -116,7 +116,12 @@ impl McpService {
                     .map(Some)
             }
             "notifications/initialized" | "initialized" => {
-                self.ensure_protocol_header(header_protocol_version.as_deref(), &id)?;
+                // Relaxed behavior: allow missing MCP-Protocol-Version on the initialized notification
+                // to maintain compatibility with clients that omit headers on notifications. If the
+                // header is present, still validate it against the negotiated version.
+                if header_protocol_version.is_some() {
+                    self.ensure_protocol_header(header_protocol_version.as_deref(), &id)?;
+                }
                 self.handle_initialized_notification(method.as_str());
                 Ok(None)
             }
