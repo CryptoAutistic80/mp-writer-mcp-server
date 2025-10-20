@@ -611,7 +611,7 @@ impl McpService {
         };
 
         match header_protocol_version {
-            Some(value) if value == expected_version => Ok(()),
+            Some(value) if Self::protocol_headers_compatible(value, &expected_version) => Ok(()),
             Some(value) => Err(self.invalid_request_response(
                 id.clone(),
                 -32600,
@@ -645,10 +645,28 @@ impl McpService {
     }
 
     fn negotiate_protocol_version(&self, requested: &str) -> Option<String> {
-        SUPPORTED_PROTOCOL_VERSIONS
-            .iter()
-            .find(|version| **version == requested)
-            .map(|version| version.to_string())
+        // If the exact version is supported, return it.
+        if SUPPORTED_PROTOCOL_VERSIONS.iter().any(|v| *v == requested) {
+            return Some(requested.to_string());
+        }
+
+        // Backward/forward-compatibility mapping:
+        // Treat the date-based protocol tag as equivalent to 1.1 for capability purposes.
+        match requested {
+            "2025-03-26" => Some("1.1".to_string()),
+            _ => None,
+        }
+    }
+
+    fn protocol_headers_compatible(a: &str, b: &str) -> bool {
+        if a == b {
+            return true;
+        }
+
+        // Consider these aliases equivalent for header checks to avoid needless client failures
+        // when a client pins a date-based header but the server negotiates a semantic version.
+        let group_11 = ["2025-03-26", "1.1"];
+        (group_11.contains(&a) && group_11.contains(&b))
     }
 
     fn describe_tool_error(&self, tool_name: &str, error: &AppError) -> String {
