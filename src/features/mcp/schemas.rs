@@ -11,6 +11,110 @@ pub fn build_tool_schemas() -> (Vec<ToolDefinition>, HashMap<String, Value>) {
     push_tool(
         &mut definitions,
         &mut input_schemas,
+        "search",
+        "Search Parliament data",
+        "Perform searches across UK Parliament datasets including legislation, bills, and indexed core datasets.",
+        json!({
+            "type": "object",
+            "required": ["target"],
+            "properties": {
+                "target": {"type": "string", "enum": ["uk_law", "bills", "dataset"]},
+                "query": {"type": "string", "minLength": 1},
+                "dataset": {"type": "string", "minLength": 1},
+                "legislationType": {"type": "string", "enum": ["primary", "secondary", "all"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                "enableCache": {"type": "boolean"},
+                "applyRelevance": {"type": "boolean"},
+                "relevanceThreshold": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "fuzzyMatch": {"type": "boolean"},
+                "house": {"type": "string", "enum": ["commons", "lords"]},
+                "session": {"type": "string"},
+                "parliamentNumber": {"type": "integer", "minimum": 1},
+                "page": {"type": "integer", "minimum": 0},
+                "perPage": {"type": "integer", "minimum": 1, "maximum": 100}
+            },
+            "allOf": [
+                {"if": {"properties": {"target": {"const": "uk_law"}}}, "then": {"required": ["query"]}},
+                {"if": {"properties": {"target": {"const": "bills"}}}, "then": {"required": ["query"]}},
+                {"if": {"properties": {"target": {"const": "dataset"}}}, "then": {"required": ["dataset", "query"]}}
+            ],
+            "additionalProperties": false
+        }),
+        Some(json!({
+            "description": "Array or object payloads returned by Parliament search endpoints.",
+            "oneOf": [
+                {"type": "array"},
+                {"type": "object"},
+                {"type": "string"},
+                {"type": "null"}
+            ]
+        })),
+    );
+
+    push_tool(
+        &mut definitions,
+        &mut input_schemas,
+        "fetch",
+        "Fetch Parliament records",
+        "Retrieve detailed Parliament records such as datasets, MP activity, voting records, and constituency lookups.",
+        json!({
+            "type": "object",
+            "required": ["target"],
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "enum": [
+                        "core_dataset",
+                        "bills",
+                        "legislation",
+                        "mp_activity",
+                        "mp_voting_record",
+                        "constituency"
+                    ]
+                },
+                "dataset": {"type": "string", "minLength": 1},
+                "searchTerm": {"type": "string"},
+                "page": {"type": "integer", "minimum": 0},
+                "perPage": {"type": "integer", "minimum": 1, "maximum": 100},
+                "enableCache": {"type": "boolean"},
+                "applyRelevance": {"type": "boolean"},
+                "relevanceThreshold": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "fuzzyMatch": {"type": "boolean"},
+                "house": {"type": "string", "enum": ["commons", "lords"]},
+                "session": {"type": "string"},
+                "parliamentNumber": {"type": "integer", "minimum": 1},
+                "mpId": {"type": "integer", "minimum": 1},
+                "fromDate": {"type": "string", "format": "date"},
+                "toDate": {"type": "string", "format": "date"},
+                "billId": {"type": "string"},
+                "legislationType": {"type": "string"},
+                "title": {"type": "string"},
+                "year": {"type": "integer", "minimum": 1800},
+                "postcode": {"type": "string", "minLength": 2},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100}
+            },
+            "allOf": [
+                {"if": {"properties": {"target": {"const": "core_dataset"}}}, "then": {"required": ["dataset"]}},
+                {"if": {"properties": {"target": {"const": "mp_activity"}}}, "then": {"required": ["mpId"]}},
+                {"if": {"properties": {"target": {"const": "mp_voting_record"}}}, "then": {"required": ["mpId"]}},
+                {"if": {"properties": {"target": {"const": "constituency"}}}, "then": {"required": ["postcode"]}}
+            ],
+            "additionalProperties": false
+        }),
+        Some(json!({
+            "description": "Structured Parliament records returned by fetch helpers.",
+            "oneOf": [
+                {"type": "object"},
+                {"type": "array"},
+                {"type": "string"},
+                {"type": "null"}
+            ]
+        })),
+    );
+
+    push_tool(
+        &mut definitions,
+        &mut input_schemas,
         "parliament.fetch_core_dataset",
         "Parliament: Fetch core dataset",
         "Fetch data from UK Parliament core datasets (legacy Linked Data API) and the Members API.",

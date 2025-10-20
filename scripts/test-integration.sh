@@ -35,19 +35,45 @@ TOOL_COUNT=$(curl -sS "$BASE_URL" \
     -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | \
     jq '.result.tools | length')
 
-if [ "$TOOL_COUNT" -eq 9 ]; then
+if [ "$TOOL_COUNT" -eq 11 ]; then
     echo "✅ List tools passed (found $TOOL_COUNT tools)"
 else
-    echo "❌ List tools failed (expected 9, got $TOOL_COUNT)"
+    echo "❌ List tools failed (expected 11, got $TOOL_COUNT)"
     exit 1
 fi
 
-# Test 3: Utilities - Current DateTime
-echo "3. Testing utilities.current_datetime..."
+# Test 3: Search - Generic Wrapper
+echo "3. Testing search tool..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | \
+    -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"search","arguments":{"target":"uk_law","query":"climate change","legislationType":"primary","limit":3,"enableCache":true}}}' | \
+    jq -e '.result.structuredContent' > /dev/null; then
+    echo "✅ Generic search tool passed"
+else
+    echo "❌ Generic search tool failed"
+    exit 1
+fi
+
+# Test 4: Fetch - Generic Wrapper
+echo "4. Testing fetch tool..."
+if curl -sS "$BASE_URL" \
+    -H "Content-Type: application/json" \
+    -H "x-api-key: $API_KEY" \
+    -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"fetch","arguments":{"target":"mp_activity","mpId":4592,"limit":3,"enableCache":true}}}' | \
+    jq -e '.result.structuredContent' > /dev/null; then
+    echo "✅ Generic fetch tool passed"
+else
+    echo "❌ Generic fetch tool failed"
+    exit 1
+fi
+
+# Test 5: Utilities - Current DateTime
+echo "5. Testing utilities.current_datetime..."
+if curl -sS "$BASE_URL" \
+    -H "Content-Type: application/json" \
+    -H "x-api-key: $API_KEY" \
+    -d '{"jsonrpc":"2.0","id":4,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | \
     jq -e '.result.structuredContent.utc' > /dev/null; then
     echo "✅ Current datetime tool passed"
 else
@@ -55,12 +81,12 @@ else
     exit 1
 fi
 
-# Test 4: Parliament - Fetch Core Dataset
-echo "4. Testing parliament.fetch_core_dataset..."
+# Test 6: Parliament - Fetch Core Dataset
+echo "6. Testing parliament.fetch_core_dataset..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":2,"enableCache":true}}}' | \
+    -d '{"jsonrpc":"2.0","id":5,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":2,"enableCache":true}}}' | \
     jq -e '.result.structuredContent.items' > /dev/null; then
     echo "✅ Core dataset tool passed"
 else
@@ -68,12 +94,12 @@ else
     exit 1
 fi
 
-# Test 5: Parliament - Fetch Bills
-echo "5. Testing parliament.fetch_bills..."
+# Test 7: Parliament - Fetch Bills
+echo "7. Testing parliament.fetch_bills..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true}}}' | \
+    -d '{"jsonrpc":"2.0","id":6,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true}}}' | \
     jq -e '.result.structuredContent.items' > /dev/null; then
     echo "✅ Bills tool passed"
 else
@@ -81,12 +107,12 @@ else
     exit 1
 fi
 
-# Test 6: Parliament - Fetch Legislation
-echo "6. Testing parliament.fetch_legislation..."
+# Test 8: Parliament - Fetch Legislation
+echo "8. Testing parliament.fetch_legislation..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":4,"method":"call_tool","params":{"name":"parliament.fetch_legislation","arguments":{"title":"Human Rights","year":1998,"type":"ukpga","enableCache":true}}}' | \
+    -d '{"jsonrpc":"2.0","id":7,"method":"call_tool","params":{"name":"parliament.fetch_legislation","arguments":{"title":"Human Rights","year":1998,"type":"ukpga","enableCache":true}}}' | \
     jq -e '.result.structuredContent.items' > /dev/null; then
     echo "✅ Legislation tool passed"
 else
@@ -94,12 +120,12 @@ else
     exit 1
 fi
 
-# Test 7: Parliament - Lookup Constituency
-echo "7. Testing parliament.lookup_constituency_offline..."
+# Test 9: Parliament - Lookup Constituency
+echo "9. Testing parliament.lookup_constituency_offline..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":5,"method":"call_tool","params":{"name":"parliament.lookup_constituency_offline","arguments":{"postcode":"SW1A 1AA","enableCache":true}}}' | \
+    -d '{"jsonrpc":"2.0","id":8,"method":"call_tool","params":{"name":"parliament.lookup_constituency_offline","arguments":{"postcode":"SW1A 1AA","enableCache":true}}}' | \
     jq -e '.result.structuredContent.constituencyName' > /dev/null; then
     echo "✅ Constituency lookup tool passed"
 else
@@ -107,12 +133,12 @@ else
     exit 1
 fi
 
-# Test 8: Parliament - Search UK Law
-echo "8. Testing parliament.search_uk_law..."
+# Test 10: Parliament - Search UK Law
+echo "10. Testing parliament.search_uk_law..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":6,"method":"call_tool","params":{"name":"parliament.search_uk_law","arguments":{"query":"climate change","legislationType":"primary","limit":3,"enableCache":true}}}' | \
+    -d '{"jsonrpc":"2.0","id":9,"method":"call_tool","params":{"name":"parliament.search_uk_law","arguments":{"query":"climate change","legislationType":"primary","limit":3,"enableCache":true}}}' | \
     jq -e '.result.structuredContent' > /dev/null; then
     echo "✅ UK law search tool passed"
 else
@@ -120,12 +146,12 @@ else
     exit 1
 fi
 
-# Test 9: Research - Run
-echo "9. Testing research.run..."
+# Test 11: Research - Run
+echo "11. Testing research.run..."
 if curl -sS "$BASE_URL" \
     -H "Content-Type: application/json" \
     -H "x-api-key: $API_KEY" \
-    -d '{"jsonrpc":"2.0","id":7,"method":"call_tool","params":{"name":"research.run","arguments":{"topic":"climate change","billKeywords":["climate"],"includeStateOfParties":true,"limit":3}}}' | \
+    -d '{"jsonrpc":"2.0","id":10,"method":"call_tool","params":{"name":"research.run","arguments":{"topic":"climate change","billKeywords":["climate"],"includeStateOfParties":true,"limit":3}}}' | \
     jq -e '.result.structuredContent.summary' > /dev/null; then
     echo "✅ Research tool passed"
 else

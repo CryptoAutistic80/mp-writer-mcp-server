@@ -7,9 +7,11 @@ use serde_json::{Value, json};
 
 use crate::core::error::AppError;
 use crate::features::mcp::dto::{
-    CallToolParams, InitializeParams, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest,
-    JsonRpcSuccess, ListToolsParams, ToolCallResult, ToolContent, ToolDefinition, ToolListResult,
+    CallToolParams, FetchToolArgs, InitializeParams, JsonRpcError, JsonRpcErrorResponse,
+    JsonRpcRequest, JsonRpcSuccess, ListToolsParams, SearchToolArgs, ToolCallResult, ToolContent,
+    ToolDefinition, ToolListResult,
 };
+use crate::features::mcp::helpers::{handle_fetch_tool, handle_search_tool};
 use crate::features::mcp::schemas::build_tool_schemas;
 use crate::features::parliament::{
     FetchBillsArgs, FetchCoreDatasetArgs, FetchLegislationArgs, FetchMpActivityArgs,
@@ -326,6 +328,22 @@ impl McpService {
         };
 
         let call_result: Result<Value, AppError> = match tool_name.as_str() {
+            "search" => {
+                let args = self.deserialize_arguments::<SearchToolArgs>(
+                    &id,
+                    tool_name.as_str(),
+                    arguments.clone(),
+                )?;
+                handle_search_tool(self.parliament_client.as_ref(), args).await
+            }
+            "fetch" => {
+                let args = self.deserialize_arguments::<FetchToolArgs>(
+                    &id,
+                    tool_name.as_str(),
+                    arguments.clone(),
+                )?;
+                handle_fetch_tool(self.parliament_client.as_ref(), args).await
+            }
             "parliament.fetch_core_dataset" => {
                 let args = self.deserialize_arguments::<FetchCoreDatasetArgs>(
                     &id,

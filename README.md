@@ -309,6 +309,8 @@ cargo run
 
 | Tool | Purpose | Example Use Case |
 |------|---------|------------------|
+| `search` | Generic search across Parliament data | "Search climate legislation" |
+| `fetch` | Generic fetch for Parliament records | "Fetch MP 4592 activity" |
 | `parliament.fetch_core_dataset` | Query MPs, divisions, debates | "Find all Labour MPs" |
 | `parliament.fetch_bills` | Search current/past bills | "What climate bills are active?" |
 | `parliament.fetch_legislation` | UK legislation metadata | "Find Human Rights Act details" |

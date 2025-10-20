@@ -27,7 +27,7 @@ curl http://localhost:4100/api/health
    - **Headers**: 
      - Key: `x-api-key`
      - Value: `4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443`
-4. Click **Test Connection** → Should show 9 tools
+4. Click **Test Connection** → Should show 11 tools
 5. Click **Save**
 
 #### Option B: CLI Configuration
@@ -97,6 +97,8 @@ curl -sS http://localhost:4100/api/mcp \
 
 | Tool | Purpose | Example |
 |------|---------|---------|
+| `search` | Generic search across Parliament data | "Search climate change laws" |
+| `fetch` | Generic fetch for Parliament records | "Fetch MP voting summary" |
 | `parliament.fetch_core_dataset` | Query MPs, divisions, debates | "Find all Labour MPs" |
 | `parliament.fetch_bills` | Search bills | "What climate bills are active?" |
 | `parliament.fetch_legislation` | UK legislation | "Find Human Rights Act" |
