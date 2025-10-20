@@ -22,8 +22,8 @@ use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_
 use crate::features::utilities::{DateTimeService, handle_current_datetime};
 
 const JSON_RPC_VERSION: &str = "2.0";
-const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "1.1", "1.0"];
-const PROTOCOL_VERSION_1_1_ALIASES: &[&str] = &["2025-06-18", "2025-03-26", "1.1"];
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-06-26", "2025-06-18", "2025-03-26", "1.1", "1.0"];
+const PROTOCOL_VERSION_1_1_ALIASES: &[&str] = &["2025-06-26", "2025-06-18", "2025-03-26", "1.1"];
 
 pub struct McpService {
     parliament_client: Arc<ParliamentClient>,
@@ -623,13 +623,13 @@ impl McpService {
                     "MCP-Protocol-Version header mismatch: expected {expected_version}, received {value}"
                 ),
             )),
-            None => Err(self.invalid_request_response(
-                id.clone(),
-                -32600,
-                format!(
-                    "MCP-Protocol-Version header missing; expected {expected_version}"
-                ),
-            )),
+            None => {
+                tracing::warn!(
+                    expected = %expected_version,
+                    "MCP-Protocol-Version header missing; assuming negotiated version"
+                );
+                Ok(())
+            }
         }
     }
 
