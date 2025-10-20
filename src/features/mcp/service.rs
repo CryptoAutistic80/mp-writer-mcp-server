@@ -175,7 +175,10 @@ impl McpService {
             }
         };
 
-        if params.protocol_version != header_protocol_version {
+        if !Self::protocol_headers_compatible(
+            params.protocol_version.as_str(),
+            header_protocol_version.as_str(),
+        ) {
             return Err(self.invalid_request_response(
                 Some(id.clone()),
                 -32600,
@@ -666,7 +669,7 @@ impl McpService {
         // Consider these aliases equivalent for header checks to avoid needless client failures
         // when a client pins a date-based header but the server negotiates a semantic version.
         let group_11 = ["2025-03-26", "1.1"];
-        (group_11.contains(&a) && group_11.contains(&b))
+        group_11.contains(&a) && group_11.contains(&b)
     }
 
     fn describe_tool_error(&self, tool_name: &str, error: &AppError) -> String {
