@@ -14,6 +14,8 @@
 
 | Tool | Purpose |
 |------|---------|
+| `search` | Generic search wrapper for Parliament data |
+| `fetch` | Generic fetch wrapper for Parliament records |
 | `utilities.current_datetime` | Current time (UTC/London) |
 | `parliament.fetch_core_dataset` | Query MPs, divisions, debates |
 | `parliament.fetch_bills` | Search current/past bills |

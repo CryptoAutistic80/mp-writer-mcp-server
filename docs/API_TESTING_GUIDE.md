@@ -32,7 +32,7 @@ curl -sS http://localhost:4100/api/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"list_tools","params":{}}' | jq
 ```
 
-**Expected Response:** JSON object with 9 tools listed
+**Expected Response:** JSON object with 11 tools listed
 
 ### Initialize (Optional)
 
@@ -46,110 +46,134 @@ curl -sS http://localhost:4100/api/mcp \
 
 ## Tool Testing
 
-### 1. Utilities: Current DateTime
+### 1. Search: Generic Parliament Search
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | jq
+  -d '{"jsonrpc":"2.0","id":1,"method":"call_tool","params":{"name":"search","arguments":{"target":"uk_law","query":"climate change","legislationType":"primary","limit":5,"enableCache":true}}}' | jq
+```
+
+**Expected Response:** Climate change legislation results from the search wrapper
+
+### 2. Fetch: Generic Parliament Fetch
+
+```bash
+curl -sS http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"fetch","arguments":{"target":"mp_activity","mpId":4592,"limit":5,"enableCache":true}}}' | jq
+```
+
+**Expected Response:** Recent activity for MP ID 4592 delivered through the generic fetch tool
+
+### 3. Utilities: Current DateTime
+
+```bash
+curl -sS http://localhost:4100/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"utilities.current_datetime","arguments":{}}}' | jq
 ```
 
 **Expected Response:** Current UTC and London time
 
-### 2. Parliament: Fetch Core Dataset
+### 4. Parliament: Fetch Core Dataset
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":5,"enableCache":true,"fuzzyMatch":false,"applyRelevance":false}}}' | jq
+  -d '{"jsonrpc":"2.0","id":4,"method":"call_tool","params":{"name":"parliament.fetch_core_dataset","arguments":{"dataset":"commonsmembers","searchTerm":"Johnson","page":0,"perPage":5,"enableCache":true,"fuzzyMatch":false,"applyRelevance":false}}}' | jq
 ```
 
 **Expected Response:** List of MPs named "Johnson"
 
-### 3. Parliament: Fetch Bills
+### 5. Parliament: Fetch Bills
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.45}}}' | jq
+  -d '{"jsonrpc":"2.0","id":5,"method":"call_tool","params":{"name":"parliament.fetch_bills","arguments":{"searchTerm":"climate","house":"commons","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.45}}}' | jq
 ```
 
 **Expected Response:** List of climate-related bills
 
-### 4. Parliament: Fetch Legislation
+### 6. Parliament: Fetch Legislation
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":4,"method":"call_tool","params":{"name":"parliament.fetch_legislation","arguments":{"title":"Human Rights","year":1998,"type":"ukpga","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.3}}}' | jq
+  -d '{"jsonrpc":"2.0","id":6,"method":"call_tool","params":{"name":"parliament.fetch_legislation","arguments":{"title":"Human Rights","year":1998,"type":"ukpga","enableCache":true,"applyRelevance":true,"relevanceThreshold":0.3}}}' | jq
 ```
 
 **Expected Response:** Human Rights Act 1998 details
 
-### 5. Parliament: Fetch MP Activity
+### 7. Parliament: Fetch MP Activity
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":5,"method":"call_tool","params":{"name":"parliament.fetch_mp_activity","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
+  -d '{"jsonrpc":"2.0","id":7,"method":"call_tool","params":{"name":"parliament.fetch_mp_activity","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
 ```
 
 **Expected Response:** Recent activity for MP ID 4592
 
-### 6. Parliament: Fetch MP Voting Record
+### 8. Parliament: Fetch MP Voting Record
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":6,"method":"call_tool","params":{"name":"parliament.fetch_mp_voting_record","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
+  -d '{"jsonrpc":"2.0","id":8,"method":"call_tool","params":{"name":"parliament.fetch_mp_voting_record","arguments":{"mpId":4592,"limit":5,"enableCache":true}}}' | jq
 ```
 
 **Expected Response:** Recent voting record for MP ID 4592
 
-### 7. Parliament: Lookup Constituency
+### 9. Parliament: Lookup Constituency
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":7,"method":"call_tool","params":{"name":"parliament.lookup_constituency_offline","arguments":{"postcode":"SW1A 1AA","enableCache":true}}}' | jq
+  -d '{"jsonrpc":"2.0","id":9,"method":"call_tool","params":{"name":"parliament.lookup_constituency_offline","arguments":{"postcode":"SW1A 1AA","enableCache":true}}}' | jq
 ```
 
 **Expected Response:** Constituency information for SW1A 1AA
 
-### 8. Parliament: Search UK Law
+### 10. Parliament: Search UK Law
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":8,"method":"call_tool","params":{"name":"parliament.search_uk_law","arguments":{"query":"climate change","legislationType":"primary","limit":5,"enableCache":true}}}' | jq
+  -d '{"jsonrpc":"2.0","id":10,"method":"call_tool","params":{"name":"parliament.search_uk_law","arguments":{"query":"climate change","legislationType":"primary","limit":5,"enableCache":true}}}' | jq
 ```
 
 **Expected Response:** Climate change legislation
 
-### 9. Research: Run
+### 11. Research: Run
 
 ```bash
 curl -sS http://localhost:4100/api/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: 4da006fc4086f0ae7b93420d34b6b955d5f567805fc887531214ddfeaea7c443" \
   -H "MCP-Protocol-Version: 2025-03-26" \
-  -d '{"jsonrpc":"2.0","id":9,"method":"call_tool","params":{"name":"research.run","arguments":{"topic":"climate change","billKeywords":["climate action"],"debateKeywords":["climate debate"],"includeStateOfParties":true,"limit":5}}}' | jq
+  -d '{"jsonrpc":"2.0","id":11,"method":"call_tool","params":{"name":"research.run","arguments":{"topic":"climate change","billKeywords":["climate action"],"debateKeywords":["climate debate"],"includeStateOfParties":true,"limit":5}}}' | jq
 ```
 
 **Expected Response:** Comprehensive research brief on climate change

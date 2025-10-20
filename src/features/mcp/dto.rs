@@ -97,3 +97,88 @@ pub struct ToolContent {
     pub kind: String,
     pub text: String,
 }
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchToolTarget {
+    UkLaw,
+    Bills,
+    Dataset,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchToolArgs {
+    pub target: SearchToolTarget,
+    pub query: Option<String>,
+    pub dataset: Option<String>,
+    #[serde(rename = "legislationType")]
+    pub legislation_type: Option<String>,
+    pub limit: Option<u32>,
+    #[serde(rename = "enableCache")]
+    pub enable_cache: Option<bool>,
+    #[serde(rename = "applyRelevance")]
+    pub apply_relevance: Option<bool>,
+    #[serde(rename = "relevanceThreshold")]
+    pub relevance_threshold: Option<f32>,
+    #[serde(rename = "fuzzyMatch")]
+    pub fuzzy_match: Option<bool>,
+    #[serde(rename = "house")]
+    pub house: Option<String>,
+    pub session: Option<String>,
+    #[serde(rename = "parliamentNumber")]
+    pub parliament_number: Option<u32>,
+    #[serde(rename = "page")]
+    pub page: Option<u32>,
+    #[serde(rename = "perPage")]
+    pub per_page: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum FetchToolTarget {
+    CoreDataset,
+    Bills,
+    Legislation,
+    MpActivity,
+    MpVotingRecord,
+    Constituency,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FetchToolArgs {
+    pub target: FetchToolTarget,
+    pub dataset: Option<String>,
+    #[serde(rename = "searchTerm")]
+    pub search_term: Option<String>,
+    #[serde(rename = "page")]
+    pub page: Option<u32>,
+    #[serde(rename = "perPage")]
+    pub per_page: Option<u32>,
+    #[serde(rename = "enableCache")]
+    pub enable_cache: Option<bool>,
+    #[serde(rename = "applyRelevance")]
+    pub apply_relevance: Option<bool>,
+    #[serde(rename = "relevanceThreshold")]
+    pub relevance_threshold: Option<f32>,
+    #[serde(rename = "fuzzyMatch")]
+    pub fuzzy_match: Option<bool>,
+    #[serde(rename = "house")]
+    pub house: Option<String>,
+    pub session: Option<String>,
+    #[serde(rename = "parliamentNumber")]
+    pub parliament_number: Option<u32>,
+    #[serde(rename = "mpId")]
+    pub mp_id: Option<u32>,
+    #[serde(rename = "fromDate")]
+    pub from_date: Option<String>,
+    #[serde(rename = "toDate")]
+    pub to_date: Option<String>,
+    #[serde(rename = "billId")]
+    pub bill_id: Option<String>,
+    #[serde(rename = "legislationType")]
+    pub legislation_type: Option<String>,
+    pub title: Option<String>,
+    pub year: Option<u32>,
+    pub postcode: Option<String>,
+    pub limit: Option<u32>,
+}
