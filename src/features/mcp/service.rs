@@ -22,7 +22,8 @@ use crate::features::research::{ResearchRequestDto, ResearchService, handle_run_
 use crate::features::utilities::{DateTimeService, handle_current_datetime};
 
 const JSON_RPC_VERSION: &str = "2.0";
-const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-06-26", "2025-06-18", "2025-03-26", "1.1", "1.0"];
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] =
+    &["2025-06-26", "2025-06-18", "2025-03-26", "1.1", "1.0"];
 const PROTOCOL_VERSION_1_1_ALIASES: &[&str] = &["2025-06-26", "2025-06-18", "2025-03-26", "1.1"];
 
 pub struct McpService {
@@ -640,11 +641,20 @@ impl McpService {
     ) -> Result<Value, JsonRpcErrorResponse> {
         match id {
             Some(value) if !value.is_null() => Ok(value.clone()),
-            _ => Err(self.invalid_request_response(
-                id.clone(),
-                -32600,
-                format!("{method} requires a non-null id"),
-            )),
+            Some(_) => {
+                tracing::warn!(
+                    method = method,
+                    "Received null id; returning response with null id for compatibility"
+                );
+                Ok(Value::Null)
+            }
+            None => {
+                tracing::warn!(
+                    method = method,
+                    "Missing id; returning response with null id for compatibility"
+                );
+                Ok(Value::Null)
+            }
         }
     }
 
@@ -656,7 +666,10 @@ impl McpService {
 
         // Backward/forward-compatibility mapping:
         // Treat the date-based protocol tag as equivalent to 1.1 for capability purposes.
-        if PROTOCOL_VERSION_1_1_ALIASES.iter().any(|alias| *alias == requested) {
+        if PROTOCOL_VERSION_1_1_ALIASES
+            .iter()
+            .any(|alias| *alias == requested)
+        {
             return Some("1.1".to_string());
         }
 
